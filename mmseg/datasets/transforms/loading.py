@@ -13,6 +13,9 @@ from mmcv.transforms import LoadImageFromFile
 from mmseg.registry import TRANSFORMS
 from mmseg.utils import datafrombytes
 
+from PIL import Image
+import numpy as np
+
 try:
     from osgeo import gdal
 except ImportError:
@@ -542,6 +545,57 @@ class LoadSingleRSImageFromFile(BaseTransform):
         if ds is None:
             raise Exception(f'Unable to open file: {filename}')
         img = np.einsum('ijk->jki', ds.ReadAsArray())
+
+        if self.to_float32:
+            img = img.astype(np.float32)
+
+        results['img'] = img
+        results['img_shape'] = img.shape[:2]
+        results['ori_shape'] = img.shape[:2]
+        return results
+
+    def __repr__(self):
+        repr_str = (f'{self.__class__.__name__}('
+                    f'to_float32={self.to_float32})')
+        return repr_str
+
+
+@TRANSFORMS.register_module()
+class LoadTifImageFromFile(BaseTransform):
+    """Load a Remote Sensing mage from file.
+
+    Required Keys:
+
+    - img_path
+
+    Modified Keys:
+
+    - img
+    - img_shape
+    - ori_shape
+
+    Args:
+        to_float32 (bool): Whether to convert the loaded image to a float32
+            numpy array. If set to False, the loaded image is a float64 array.
+            Defaults to True.
+    """
+
+    def __init__(self, to_float32: bool = True):
+        self.to_float32 = to_float32
+            
+    def transform(self, results: Dict) -> Dict:
+        """Functions to load image.
+
+        Args:
+            results (dict): Result dict from :obj:``mmcv.BaseDataset``.
+
+        Returns:
+            dict: The dict contains loaded image and meta information.
+        """
+
+        filename = results['img_path']
+        img = Image.open(filename)
+        img = np.array(img)
 
         if self.to_float32:
             img = img.astype(np.float32)
