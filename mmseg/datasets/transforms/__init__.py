@@ -4,6 +4,7 @@ from .loading import (LoadAnnotations, LoadBiomedicalAnnotation,
                       LoadBiomedicalData, LoadBiomedicalImageFromFile,
                       LoadDepthAnnotation, LoadImageFromNDArray,
                       LoadMultipleRSImageFromFile, LoadSingleRSImageFromFile,
+                      # custom
                       LoadTifImageFromFile)
 # yapf: disable
 from .transforms import (CLAHE, AdjustGamma, Albu, BioMedical3DPad,
@@ -14,7 +15,9 @@ from .transforms import (CLAHE, AdjustGamma, Albu, BioMedical3DPad,
                          RandomDepthMix, RandomFlip, RandomMosaic,
                          RandomRotate, RandomRotFlip, Rerange, Resize,
                          ResizeShortestEdge, ResizeToMultiple, RGB2Gray,
-                         SegRescale)
+                         SegRescale,
+                         # custom
+                         PhotoMetricDistortionTif, RandomRotate90)
 
 # yapf: enable
 __all__ = [
@@ -27,5 +30,8 @@ __all__ = [
     'BioMedical3DRandomFlip', 'BioMedicalRandomGamma', 'BioMedical3DPad',
     'RandomRotFlip', 'Albu', 'LoadSingleRSImageFromFile', 'ConcatCDInput',
     'LoadMultipleRSImageFromFile', 'LoadDepthAnnotation', 'RandomDepthMix',
-    'RandomFlip', 'Resize', "LoadTifImageFromFile"
+    'RandomFlip', 'Resize',
+    # custom
+    "LoadTifImageFromFile",
+    'PhotoMetricDistortionTif', 'RandomRotate90'
 ]
