@@ -133,7 +133,7 @@ model = dict(
     train_cfg=dict(),
     test_cfg=dict(mode='whole'))
 
-data_root = '/mnt/home/wangzhiyu_data/Data/Challenge/2024-CVPR-Agriculture-Vision/supervised/Agriculture-Vision-2021-MMSeg-RGBN/'
+data_root = '/mnt/home/wangzhiyu_data/Agriculture-Vision-2021-MMSeg-RGBN/'
 # dataset config
 train_pipeline = [
     dict(type='LoadTifImageFromFile'),
