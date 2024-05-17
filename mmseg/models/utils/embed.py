@@ -198,7 +198,7 @@ class PatchEmbed(BaseModule):
 
         x = self.projection(x)
         out_size = (x.shape[2], x.shape[3])
-        x = x.flatten(2).transpose(1, 2)
+        x = x.flatten(2).transpose(1, 2).contiguous()
         if self.norm is not None:
             x = self.norm(x)
         return x, out_size
