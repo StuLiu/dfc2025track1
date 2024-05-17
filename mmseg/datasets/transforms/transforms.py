@@ -470,6 +470,8 @@ class RandomRotate90(RandomRotate):
                  center=None,
                  auto_bound=False):
         super().__init__(prob, degree, pad_val, seg_pad_val, center, auto_bound)
+        assert degree in [0, 90, 180, 270]
+        self.degree_2 = degree
 
     def transform(self, results: dict) -> dict:
         """Call function to rotate image, semantic segmentation maps.
@@ -482,12 +484,11 @@ class RandomRotate90(RandomRotate):
         """
 
         rotate, _ = self.generate_degree()
-        degree = 90
         if rotate:
             # rotate image
             results['img'] = mmcv.imrotate(
                 results['img'],
-                angle=degree,
+                angle=self.degree_2,
                 border_value=self.pal_val,
                 center=self.center,
                 auto_bound=self.auto_bound)
@@ -496,7 +497,7 @@ class RandomRotate90(RandomRotate):
             for key in results.get('seg_fields', []):
                 results[key] = mmcv.imrotate(
                     results[key],
-                    angle=degree,
+                    angle=self.degree_2,
                     border_value=self.seg_pad_val,
                     center=self.center,
                     auto_bound=self.auto_bound,
