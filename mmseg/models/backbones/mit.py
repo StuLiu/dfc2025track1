@@ -175,13 +175,13 @@ class EfficientMultiheadAttention(MultiheadAttention):
         # (num_query ,batch, embed_dims), and recover ``attn_output``
         # from num_query_first to batch_first.
         if self.batch_first:
-            x_q = x_q.transpose(0, 1)
-            x_kv = x_kv.transpose(0, 1)
+            x_q = x_q.transpose(0, 1).contiguous()
+            x_kv = x_kv.transpose(0, 1).contiguous()
 
         out = self.attn(query=x_q, key=x_kv, value=x_kv)[0]
 
         if self.batch_first:
-            out = out.transpose(0, 1)
+            out = out.transpose(0, 1).contiguous()
 
         return identity + self.dropout_layer(self.proj_drop(out))
 
