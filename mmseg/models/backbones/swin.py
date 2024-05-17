@@ -569,6 +569,7 @@ class SwinTransformer(BaseModule):
 
         assert strides[0] == patch_size, 'Use non-overlapping patch embed.'
 
+        self.in_channels = in_channels
         self.patch_embed = PatchEmbed(
             in_channels=in_channels,
             embed_dims=embed_dims,
@@ -689,6 +690,10 @@ class SwinTransformer(BaseModule):
 
             state_dict = OrderedDict()
             for k, v in _state_dict.items():
+                # adjust in_channels
+                if k == 'patch_embed.projection.weight':
+                    v = self._set_in_channels(self.in_channels, v, 3)
+                    print(f'>>>>>>>>>>>>>>>>>>>>>>>>>> finish set in channels. new_channel={v.shape[1]}')
                 if k.startswith('backbone.'):
                     state_dict[k[9:]] = v
                 else:
@@ -735,6 +740,21 @@ class SwinTransformer(BaseModule):
 
             # load state_dict
             self.load_state_dict(state_dict, strict=False)
+
+    def _set_in_channels(self, in_channels: int, weight: torch.Tensor, default_in_channels=3) -> torch.Tensor:
+        if in_channels == default_in_channels:
+            return weight
+
+        if self.in_channels == 1:
+            weight_new = weight.sum(1, keepdim=True)
+        else:
+            c_out, c_in, k_h, k_w = weight.shape
+            weight_new = torch.zeros((c_out, self.in_channels, k_h, k_w)).float()
+            for idx in range(self.in_channels):
+                weight_new[:, idx, :, :] = weight[:, idx % default_in_channels, :, :]
+            weight_new = weight_new * (default_in_channels / in_channels)
+
+        return weight_new
 
     def forward(self, x):
         x, hw_shape = self.patch_embed(x)
