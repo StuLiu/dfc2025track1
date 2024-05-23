@@ -1,6 +1,10 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 from typing import List
 
+import os
+import ipdb
+import numpy as np
+from PIL import Image
 import torch
 from mmengine.model import BaseTTAModel
 from mmengine.structures import PixelData
@@ -38,6 +42,14 @@ class SegTTAModel(BaseTTAModel):
                             ).to(logits).squeeze(1)
             else:
                 seg_pred = logits.argmax(dim=0)
+
+            save_dir = "./results_tta_test"
+            os.makedirs(save_dir, exist_ok=True)
+            img_name = os.path.basename(data_samples[0].img_path)[:-4]
+            logits = (logits.cpu().numpy() * 255).astype(np.uint8)
+            for i in range(9):
+                img = Image.fromarray(logits[i], 'L')  # 'L'模式表示8位像素，黑白
+                img.save(f'{save_dir}/{img_name}_class_{i}.png')
             data_sample.set_data({'pred_sem_seg': PixelData(data=seg_pred)})
             if hasattr(data_samples[0], 'gt_sem_seg'):
                 data_sample.set_data(
