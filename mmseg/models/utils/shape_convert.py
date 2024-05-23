@@ -13,7 +13,7 @@ def nlc_to_nchw(x, hw_shape):
     assert len(x.shape) == 3
     B, L, C = x.shape
     assert L == H * W, 'The seq_len doesn\'t match H, W'
-    return x.transpose(1, 2).reshape(B, C, H, W)
+    return x.transpose(1, 2).reshape(B, C, H, W).contiguous()
 
 
 def nchw_to_nlc(x):
@@ -56,9 +56,9 @@ def nchw2nlc2nchw(module, x, contiguous=False, **kwargs):
     """
     B, C, H, W = x.shape
     if not contiguous:
-        x = x.flatten(2).transpose(1, 2)
+        x = x.flatten(2).transpose(1, 2).contiguous()
         x = module(x, **kwargs)
-        x = x.transpose(1, 2).reshape(B, C, H, W)
+        x = x.transpose(1, 2).reshape(B, C, H, W).contiguous()
     else:
         x = x.flatten(2).transpose(1, 2).contiguous()
         x = module(x, **kwargs)
@@ -97,9 +97,9 @@ def nlc2nchw2nlc(module, x, hw_shape, contiguous=False, **kwargs):
     B, L, C = x.shape
     assert L == H * W, 'The seq_len doesn\'t match H, W'
     if not contiguous:
-        x = x.transpose(1, 2).reshape(B, C, H, W)
+        x = x.transpose(1, 2).reshape(B, C, H, W).contiguous()
         x = module(x, **kwargs)
-        x = x.flatten(2).transpose(1, 2)
+        x = x.flatten(2).transpose(1, 2).contiguous()
     else:
         x = x.transpose(1, 2).reshape(B, C, H, W).contiguous()
         x = module(x, **kwargs)

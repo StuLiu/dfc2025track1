@@ -72,8 +72,7 @@ model = dict(
         in_channels=384,
         num_classes=9,
         loss_decode=dict(type='ACWLoss')
-    ),
-    # task_specific_params=dict(find_unused_parameters=True)
+    )
 )
 
 # AdamW optimizer, no weight decay for position embedding & layer norm
