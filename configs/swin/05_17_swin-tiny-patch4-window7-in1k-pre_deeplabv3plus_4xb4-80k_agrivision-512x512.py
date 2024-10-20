@@ -9,7 +9,7 @@ data_preprocessor = dict(
     bgr_to_rgb=False,
     size=crop_size
 )
-data_root = 'data/2024-CVPR-Agriculture-Vision/supervised/Agriculture-Vision-2021-MMSeg-RGBN'
+data_root = '/home/liuwang/liuwang_data/documents/datasets/seg/2024-CVPR-Agriculture-Vision/supervised/Agriculture-Vision-2021-MMSeg-RGBN'
 train_pipeline = [
     dict(type='LoadTifImageFromFile'),
     dict(type='LoadAnnotations'),

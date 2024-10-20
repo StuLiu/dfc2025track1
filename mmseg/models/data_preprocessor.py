@@ -7,6 +7,7 @@ from mmengine.model import BaseDataPreprocessor
 
 from mmseg.registry import MODELS
 from mmseg.utils import stack_batch
+from mmseg.utils.mixing import cutmix, classmix
 
 
 @MODELS.register_module()
@@ -149,3 +150,81 @@ class SegDataPreProcessor(BaseDataPreprocessor):
                 inputs = torch.stack(inputs, dim=0)
 
         return dict(inputs=inputs, data_samples=data_samples)
+
+class ComposeBatchAug:
+
+    def __init__(self, batch_augments):
+        self.batch_augments = None
+        if batch_augments:
+            self.batch_augments = [eval(batch_aug)() for batch_aug in batch_augments]
+
+    def __call__(self, inputs, data_samples):
+        if self.batch_augments:
+            for batch_augment in self.batch_augments:
+                inputs, data_samples = batch_augment(inputs, data_samples)
+        return inputs, data_samples
+
+
+class BatchAugBase:
+
+    def __init__(self, name=None):
+        self.name = 'batch_aug_base' if name is None else name
+
+    def __call__(self, inputs, data_samples):
+        raise NotImplemented()
+
+    def __str__(self):
+        return self.name
+
+
+class CutMix(BatchAugBase):
+
+    def __init__(self):
+        super().__init__('batch_aug_cutmix')
+
+    def __call__(self, inputs, data_samples):
+        # print(inputs.shape)
+
+        targets = [ds.gt_sem_seg.data for ds in data_samples]
+        targets = torch.cat(targets, dim=0)
+        inputs, targets = cutmix(inputs, targets)
+        for i in range(len(data_samples)):
+            data_samples[i].gt_sem_seg.data = targets[i: i + 1, :, :]
+        return inputs, data_samples
+
+
+class ClassMix(BatchAugBase):
+
+    def __init__(self):
+        super().__init__('batch_aug_classmix')
+
+    def __call__(self, inputs, data_samples):
+
+        # print(inputs.shape)
+        targets = [ds.gt_sem_seg.data for ds in data_samples]
+        targets = torch.cat(targets, dim=0)
+        inputs, targets = classmix(inputs, targets, ratio=0.5, class_num=9, ignore_label=255)
+        for i in range(len(data_samples)):
+            data_samples[i].gt_sem_seg.data = targets[i: i + 1, :, :]
+        return inputs, data_samples
+
+
+@MODELS.register_module()
+class SegDataPreProcessorV2(SegDataPreProcessor):
+    def __init__(
+        self,
+        mean: Sequence[Number] = None,
+        std: Sequence[Number] = None,
+        size: Optional[tuple] = None,
+        size_divisor: Optional[int] = None,
+        pad_val: Number = 0,
+        seg_pad_val: Number = 255,
+        bgr_to_rgb: bool = False,
+        rgb_to_bgr: bool = False,
+        batch_augments: Optional[List[str]] = None,
+        test_cfg: dict = None,
+    ):
+        super().__init__(mean, std, size, size_divisor, pad_val, seg_pad_val, bgr_to_rgb, rgb_to_bgr,
+                         None, test_cfg)
+        if batch_augments:
+            self.batch_augments = ComposeBatchAug(batch_augments)

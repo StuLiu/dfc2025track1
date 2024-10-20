@@ -515,6 +515,89 @@ class RandomRotate90(RandomRotate):
         return repr_str
 
 
+
+@TRANSFORMS.register_module()
+class RandomRotateRectangle(RandomRotate):
+    """Rotate the image & seg.
+
+    Required Keys:
+
+    - img
+    - gt_seg_map
+
+    Modified Keys:
+
+    - img
+    - gt_seg_map
+
+    Args:
+        prob (float): The rotation probability.
+        degree (float, tuple[float]): Range of degrees to select from. If
+            degree is a number instead of tuple like (min, max),
+            the range of degree will be (``-degree``, ``+degree``)
+        pad_val (float, optional): Padding value of image. Default: 0.
+        seg_pad_val (float, optional): Padding value of segmentation map.
+            Default: 255.
+        center (tuple[float], optional): Center point (w, h) of the rotation in
+            the source image. If not specified, the center of the image will be
+            used. Default: None.
+        auto_bound (bool): Whether to adjust the image size to cover the whole
+            rotated image. Default: False
+    """
+
+    def __init__(self,
+                 prob,
+                 degree=90,
+                 pad_val=0,
+                 seg_pad_val=255,
+                 center=None,
+                 auto_bound=False):
+        super().__init__(prob, degree, pad_val, seg_pad_val, center, auto_bound)
+        # assert degree in [0, 90, 180, 270]
+        self.degree_2 = [0, 90, 180, 270]
+
+    def transform(self, results: dict) -> dict:
+        """Call function to rotate image, semantic segmentation maps.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Rotated results.
+        """
+
+        rotate, _ = self.generate_degree()
+        angle = np.random.choice(self.degree_2)
+        if rotate:
+            # rotate image
+            results['img'] = mmcv.imrotate(
+                results['img'],
+                angle=angle,
+                border_value=self.pal_val,
+                center=self.center,
+                auto_bound=self.auto_bound)
+
+            # rotate segs
+            for key in results.get('seg_fields', []):
+                results[key] = mmcv.imrotate(
+                    results[key],
+                    angle=angle,
+                    border_value=self.seg_pad_val,
+                    center=self.center,
+                    auto_bound=self.auto_bound,
+                    interpolation='nearest')
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += f'(prob={self.prob}, ' \
+                    f'degree={90}, ' \
+                    f'pad_val={self.pal_val}, ' \
+                    f'seg_pad_val={self.seg_pad_val}, ' \
+                    f'center={self.center}, ' \
+                    f'auto_bound={self.auto_bound})'
+        return repr_str
+
 @TRANSFORMS.register_module()
 class RGB2Gray(BaseTransform):
     """Convert RGB image to grayscale image.
@@ -901,6 +984,84 @@ class PhotoMetricDistortionTif(PhotoMetricDistortion):
         img_origin[:, :, :3] = img
         results['img'] = img_origin
 
+        return results
+
+
+@TRANSFORMS.register_module()
+class PhotoMetricDistortionTifWhispers(PhotoMetricDistortion):
+    """Apply photometric distortion to image sequentially, every transformation
+    is applied with a probability of 0.5. The position of random contrast is in
+    second or second to last.
+
+    1. random brightness
+    2. random contrast (mode 0)
+    3. convert color from BGR to HSV
+    4. random saturation
+    5. random hue
+    6. convert color from HSV to BGR
+    7. random contrast (mode 1)
+
+    Required Keys:
+
+    - img
+
+    Modified Keys:
+
+    - img[:3]
+
+    Args:
+        brightness_delta (int): delta of brightness.
+        contrast_range (tuple): range of contrast.
+        saturation_range (tuple): range of saturation.
+        hue_delta (int): delta of hue.
+    """
+
+    def __init__(self,
+                 brightness_delta: int = 32,
+                 contrast_range: Sequence[float] = (0.5, 1.5),
+                 saturation_range: Sequence[float] = (0.5, 1.5),
+                 hue_delta: int = 18):
+        super().__init__(brightness_delta, contrast_range, saturation_range, hue_delta)
+
+    @staticmethod
+    def color_jitter(image, brightness=0.5, contrast=0.5, saturation=0.5):
+        image_cp = image.copy()[:, :, :-2]
+        # 亮度调整
+        if brightness != 0:
+            brightness_factor = 1 + np.random.uniform(-brightness, brightness)
+            image_cp = image_cp * brightness_factor  # 直接调整，而不裁剪到 0-255
+
+        # 对比度调整
+        if contrast != 0:
+            mean = np.mean(image_cp, axis=(0, 1), keepdims=True)
+            contrast_factor = 1 + np.random.uniform(-contrast, contrast)
+            image_cp = mean + contrast_factor * (image_cp - mean)  # 直接在浮动值基础上调整
+
+        # 饱和度调整
+        if saturation != 0:
+            # 计算图像的平均值
+            gray = np.mean(image_cp, axis=-1, keepdims=True)
+            saturation_factor = 1 + np.random.uniform(-saturation, saturation)
+            # 计算新的通道值
+            image_cp = gray + (image_cp - gray) * saturation_factor
+
+        image_out = np.concatenate([image_cp, image[:, :, -2:]], axis=2)
+
+        return image_out
+
+    def transform(self, results: dict) -> dict:
+        """Transform function to perform photometric distortion on images.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Result dict with images distorted.
+        """
+
+        img_origin = results['img']
+        img_origin = self.color_jitter(img_origin)
+        results['img'] = img_origin
         return results
 
 

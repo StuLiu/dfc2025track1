@@ -2,15 +2,72 @@
 from typing import List
 
 import os
-import ipdb
+# import ipdb
 import numpy as np
 from PIL import Image
+import skimage.io as sio
 import torch
 from mmengine.model import BaseTTAModel
 from mmengine.structures import PixelData
 
 from mmseg.registry import MODELS
 from mmseg.utils import SampleList
+import warnings
+import time
+
+
+warnings.filterwarnings('ignore')
+
+# save_dir = f"./results_mid/mid_{int(time.time())}"
+# # save_dir = "/mnt/home/liuwang_data/results_mid/segformer-b5_acw_rc0.75-1.5_noiseblur_classmix"
+# os.makedirs(save_dir, exist_ok=True)
+
+
+@MODELS.register_module()
+class SegTTAModel2(BaseTTAModel):
+
+    def merge_preds(self, data_samples_list: List[SampleList]) -> SampleList:
+        """Merge predictions of enhanced data to one prediction.
+
+        Args:
+            data_samples_list (List[SampleList]): List of predictions
+                of all enhanced data.
+
+        Returns:
+            SampleList: Merged prediction.
+        """
+        predictions = []
+        for data_samples in data_samples_list:
+            seg_logits = data_samples[0].seg_logits.data
+            logits = torch.zeros(seg_logits.shape).to(seg_logits)
+            for data_sample in data_samples:
+                seg_logit = data_sample.seg_logits.data
+                if self.module.out_channels > 1:
+                    logits += seg_logit.softmax(dim=0)
+                else:
+                    logits += seg_logit.sigmoid()
+            logits /= len(data_samples)
+            if self.module.out_channels == 1:
+                seg_pred = (logits > self.module.decode_head.threshold
+                            ).to(logits).squeeze(1)
+            else:
+                seg_pred = logits.argmax(dim=0)
+
+            # # saving tta middle result
+            # img_name = os.path.basename(data_samples[0].img_path)[:-4]
+            # np.save(f'{save_dir}/{img_name}.npy', logits.cpu().numpy())
+            # # logits = (logits.cpu().numpy() * 255).astype(np.uint8)
+            # # for i in range(9):
+            # #     sio.imsave(f'{save_dir}/{img_name}_class_{i}.png', logits[i])
+
+            # saved tta
+            data_sample.set_data({'pred_sem_seg': PixelData(data=seg_pred)})
+            if hasattr(data_samples[0], 'gt_sem_seg'):
+                data_sample.set_data(
+                    {'gt_sem_seg': data_samples[0].gt_sem_seg})
+            data_sample.set_metainfo({'img_path': data_samples[0].img_path})
+            predictions.append(data_sample)
+        return predictions
 
 
 @MODELS.register_module()
@@ -42,14 +99,11 @@ class SegTTAModel(BaseTTAModel):
                             ).to(logits).squeeze(1)
             else:
                 seg_pred = logits.argmax(dim=0)
-
-            save_dir = "./results_tta_test"
-            os.makedirs(save_dir, exist_ok=True)
-            img_name = os.path.basename(data_samples[0].img_path)[:-4]
-            logits = (logits.cpu().numpy() * 255).astype(np.uint8)
-            for i in range(9):
-                img = Image.fromarray(logits[i], 'L')  # 'L'模式表示8位像素，黑白
-                img.save(f'{save_dir}/{img_name}_class_{i}.png')
+            data_sample = SegDataSample(
+                **{
+                    'pred_sem_seg': PixelData(data=seg_pred),
+                    'gt_sem_seg': data_samples[0].gt_sem_seg
+                })
             data_sample.set_data({'pred_sem_seg': PixelData(data=seg_pred)})
             if hasattr(data_samples[0], 'gt_sem_seg'):
                 data_sample.set_data(
@@ -57,3 +111,4 @@ class SegTTAModel(BaseTTAModel):
             data_sample.set_metainfo({'img_path': data_samples[0].img_path})
             predictions.append(data_sample)
         return predictions
+

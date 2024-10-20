@@ -1,11 +1,14 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-from .formatting import PackSegInputs
+from .formatting import (PackSegInputs,
+                         # custom
+                         MultiLabelPackSegInputs,)
 from .loading import (LoadAnnotations, LoadBiomedicalAnnotation,
                       LoadBiomedicalData, LoadBiomedicalImageFromFile,
                       LoadDepthAnnotation, LoadImageFromNDArray,
                       LoadMultipleRSImageFromFile, LoadSingleRSImageFromFile,
                       # custom
-                      LoadTifImageFromFile)
+                      LoadTifImageFromFile, LoadTifImageFromFileV2, LoadTifImageFromFileV3,
+                      LoadTifAnnotations, LoadTifAnnotationsV2)
 # yapf: disable
 from .transforms import (CLAHE, AdjustGamma, Albu, BioMedical3DPad,
                          BioMedical3DRandomCrop, BioMedical3DRandomFlip,
@@ -17,7 +20,9 @@ from .transforms import (CLAHE, AdjustGamma, Albu, BioMedical3DPad,
                          ResizeShortestEdge, ResizeToMultiple, RGB2Gray,
                          SegRescale,
                          # custom
-                         PhotoMetricDistortionTif, RandomRotate90)
+                         PhotoMetricDistortionTif, RandomRotate90,
+                         PhotoMetricDistortionTifWhispers)
+
 
 # yapf: enable
 __all__ = [
@@ -32,6 +37,8 @@ __all__ = [
     'LoadMultipleRSImageFromFile', 'LoadDepthAnnotation', 'RandomDepthMix',
     'RandomFlip', 'Resize',
     # custom
-    "LoadTifImageFromFile",
-    'PhotoMetricDistortionTif', 'RandomRotate90'
+    "LoadTifImageFromFile", 'LoadTifImageFromFileV2', 'LoadTifImageFromFileV3',
+    'PhotoMetricDistortionTif', 'RandomRotate90', 'MultiLabelPackSegInputs',
+    'LoadTifAnnotations', 'LoadTifAnnotationsV2',
+    'PhotoMetricDistortionTifWhispers',
 ]

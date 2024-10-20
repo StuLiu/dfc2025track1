@@ -11,12 +11,21 @@ from .ohem_cross_entropy_loss import OhemCrossEntropy
 from .silog_loss import SiLogLoss
 from .tversky_loss import TverskyLoss
 from .utils import reduce_loss, weight_reduce_loss, weighted_loss
-from .cross_entropy_loss import ACWLoss
+# custom
+from .cross_entropy_loss import (ACWLoss, ACWJaccardLoss, ACWLossV2, ACWFocalLoss, ACWDefocalLoss, ACWSCELoss,
+                                 HybridV1, HybridV2)
+from .multi_label_acw_loss import MultiLabelBCELoss, MultiLabelACWLoss, MultiLabelJaccardLoss
+
 
 __all__ = [
     'accuracy', 'Accuracy', 'cross_entropy', 'binary_cross_entropy',
     'mask_cross_entropy', 'CrossEntropyLoss', 'reduce_loss',
     'weight_reduce_loss', 'weighted_loss', 'LovaszLoss', 'DiceLoss',
     'FocalLoss', 'TverskyLoss', 'OhemCrossEntropy', 'BoundaryLoss',
-    'HuasdorffDisstanceLoss', 'SiLogLoss', 'ACWLoss'
+    'HuasdorffDisstanceLoss', 'SiLogLoss',
+    # custom
+    'ACWLoss', 'ACWJaccardLoss', 'ACWLossV2', 'ACWDefocalLoss', 'ACWFocalLoss', 'ACWSCELoss',
+    'MultiLabelBCELoss', 'MultiLabelACWLoss', 'MultiLabelJaccardLoss',
+    "HybridV1",
+    "HybridV2",
 ]

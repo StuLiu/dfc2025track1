@@ -5,8 +5,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from torch import Tensor
 from mmseg.registry import MODELS
 from .utils import get_class_weight, weight_reduce_loss
+from .dice_loss import DiceLoss
 
 
 def cross_entropy(pred,
@@ -208,6 +210,120 @@ def mask_cross_entropy(pred,
         pred_slice, target, weight=class_weight, reduction='mean')[None]
 
 
+class SCELoss(torch.nn.Module):
+    def __init__(self, alpha=1.0, beta=1.0):
+        super(SCELoss, self).__init__()
+        self.alpha = alpha
+        self.beta = beta
+
+    def forward(self, pred, labels_one_hot):
+        """
+        Args:
+            pred: softmaxed logits
+            labels_one_hot: one-hot label
+
+        Returns:
+
+        """
+        pred = torch.clamp(pred, min=1e-7, max=1.0)
+        # CCE
+        ce = -1 * labels_one_hot * torch.log(pred)
+
+        # RCE
+        labels_one_hot = torch.clamp(labels_one_hot, min=1e-4, max=1.0)
+        rce = -1 * pred * torch.log(labels_one_hot)
+
+        # Loss
+        loss = self.alpha * ce + self.beta * rce
+        return loss
+
+@MODELS.register_module()
+class ACWSCELoss(nn.Module):
+    def __init__(self,  ini_weight=0, ini_iteration=0, eps=1e-5,
+                 use_sigmoid=False, loss_weight=1.0, ignore_index=255):
+        super(ACWSCELoss, self).__init__()
+        self.ignore_index = ignore_index
+        self.weight = ini_weight
+        self.itr = ini_iteration
+        self.eps = eps
+        self.sce = SCELoss(alpha=1.0, beta=1.0)
+        self._loss_name = "loss_acw"
+
+    def forward(self, prediction, target, weight=None, ignore_index=-100):
+        """
+        pred :    shape (N, C, H, W)
+        target :  shape (N, H, W) ground truth
+        return:  loss_acw
+        """
+        assert weight is None
+        pred = F.softmax(prediction, 1)
+        # print(target.unique())
+        one_hot_label, mask = self.encode_one_hot_label(pred, target)
+
+        acw = self.adaptive_class_weight(pred, one_hot_label, mask)
+
+        # acw-sce
+        sce = self.sce(pred, one_hot_label)
+        loss_sce = torch.sum(acw * sce, 1)
+
+        # Dice
+        intersection = 2 * torch.sum(pred * one_hot_label, dim=(0, 2, 3)) + self.eps
+        union = pred + one_hot_label
+
+        if mask is not None:
+            union[mask] = 0
+
+        union = torch.sum(union, dim=(0, 2, 3)) + self.eps
+        dice = intersection / union
+
+        return loss_sce.mean() - dice.mean().log()
+
+    def adaptive_class_weight(self, pred, one_hot_label, mask=None):
+        self.itr += 1
+
+        sum_class = torch.sum(one_hot_label, dim=(0, 2, 3))
+        sum_norm = sum_class / sum_class.sum()
+
+        self.weight = (self.weight * (self.itr - 1) + sum_norm) / self.itr
+        mfb = self.weight.mean() / (self.weight + self.eps)
+        mfb = mfb / mfb.sum()
+        acw = (1. + pred + one_hot_label) * mfb.unsqueeze(-1).unsqueeze(-1)
+
+        if mask is not None:
+            acw[mask] = 0
+
+        return acw
+
+    def encode_one_hot_label(self, pred, target):
+        one_hot_label = pred.detach() * 0
+        if self.ignore_index is not None:
+            mask = (target == self.ignore_index)
+            target = target.clone()
+            target[mask] = 0
+            one_hot_label.scatter_(1, target.unsqueeze(1), 1)
+            mask = mask.unsqueeze(1).expand_as(one_hot_label)
+            one_hot_label[mask] = 0
+            return one_hot_label, mask
+        else:
+            one_hot_label.scatter_(1, target.unsqueeze(1), 1)
+            return one_hot_label, None
+
+    @property
+    def loss_name(self):
+        """Loss Name.
+
+        This function must be implemented and will return the name of this
+        loss function. This name will be used to combine different loss items
+        by simple sum operation. In addition, if you want this loss item to be
+        included into the backward graph, `loss_` must be the prefix of the
+        name.
+
+        Returns:
+            str: The name of this loss item.
+        """
+        return self._loss_name
+
+
 @MODELS.register_module()
 class ACWLoss(nn.Module):
     def __init__(self,  ini_weight=0, ini_iteration=0, eps=1e-5,
@@ -227,6 +343,7 @@ class ACWLoss(nn.Module):
         """
         assert weight is None
         pred = F.softmax(prediction, 1)
+        # print(target.unique())
         one_hot_label, mask = self.encode_one_hot_label(pred, target)
 
         acw = self.adaptive_class_weight(pred, one_hot_label, mask)
@@ -293,6 +410,442 @@ class ACWLoss(nn.Module):
             str: The name of this loss item.
         """
         return self._loss_name
+
+
+@MODELS.register_module()
+class ACWJaccardLoss(ACWLoss):
+
+    def __init__(self, ini_weight=0, ini_iteration=0, eps=1e-5,
+                 use_sigmoid=False, loss_weight=1.0, ignore_index=255, smooth=100):
+        super().__init__(ini_weight, ini_iteration, eps, use_sigmoid, loss_weight, ignore_index)
+        self.smooth = smooth
+        self._loss_name = 'acwj_loss'
+
+    def forward(self, prediction, target, weight=None, ignore_index=-100):
+        """
+        pred :    shape (N, C, H, W)
+        target :  shape (N, H, W) ground truth
+        return:  loss_acw
+        """
+        assert weight is None
+        pred = F.softmax(prediction, 1)
+        one_hot_label, mask = self.encode_one_hot_label(pred, target)
+
+        # pnc loss
+        acw = self.adaptive_class_weight(pred, one_hot_label, mask)
+
+        err = torch.pow((one_hot_label - pred), 2)
+        pnc = err - ((1. - err + self.eps) / (1. + err + self.eps)).log()
+        loss_pnc = torch.sum(acw * pnc, 1)
+
+        # jaccard
+        intersection = torch.sum(pred * one_hot_label, dim=(0, 2, 3))
+
+        cardinality = pred + one_hot_label
+        if mask is not None:
+            cardinality[mask] = 0
+        cardinality = torch.sum(cardinality, dim=(0, 2, 3))
+
+        union = cardinality - intersection
+        jaccard = (intersection + self.eps) / (union + self.eps)
+
+        return loss_pnc.mean() - jaccard.mean().log()
+
+
+@MODELS.register_module()
+class ACWDefocalLoss(ACWLoss):
+
+    def __init__(self, ini_weight=0, ini_iteration=0, eps=1e-5,
+                 use_sigmoid=False, loss_weight=1.0, ignore_index=255, smooth=100):
+        super().__init__(ini_weight, ini_iteration, eps, use_sigmoid, loss_weight, ignore_index)
+        self.smooth = smooth
+        self._loss_name = 'acwdf_loss'
+
+    def forward(self, prediction, target, weight=None, ignore_index=-100):
+        """
+        pred :    shape (N, C, H, W)
+        target :  shape (N, H, W) ground truth
+        return:  loss_acw
+        """
+        assert weight is None
+        pred = F.softmax(prediction, 1)
+        one_hot_label, mask = self.encode_one_hot_label(pred, target)
+
+        # defocal weight: loss larger, weight smaller
+        df_weight = 1.0 / (torch.abs(one_hot_label - pred.detach()) + self.eps)   # (n, c, h, w)
+        df_weight /= df_weight.mean()
+
+        # pnc loss
+        acw = self.adaptive_class_weight(pred, one_hot_label, mask)
+
+        err = torch.pow((one_hot_label - pred), 2)
+        pnc = err - ((1. - err + self.eps) / (1. + err + self.eps)).log()
+        loss_pnc = torch.sum(df_weight * acw * pnc, 1)
+
+        # jaccard
+        intersection = torch.sum(pred * one_hot_label, dim=(0, 2, 3))
+
+        cardinality = pred + one_hot_label
+        if mask is not None:
+            cardinality[mask] = 0
+        cardinality = torch.sum(cardinality, dim=(0, 2, 3))
+
+        union = cardinality - intersection
+        jaccard = (intersection + self.eps) / (union + self.eps)
+
+        return loss_pnc.mean() - jaccard.mean().log()
+
+
+
+@MODELS.register_module()
+class ACWFocalLoss(ACWLoss):
+
+    def __init__(self, ini_weight=0, ini_iteration=0, eps=1e-5,
+                 use_sigmoid=False, loss_weight=1.0, ignore_index=255, smooth=100, gamma=2.0):
+        super().__init__(ini_weight, ini_iteration, eps, use_sigmoid, loss_weight, ignore_index)
+        self.smooth = smooth
+        self.gamma = gamma
+        self._loss_name = 'acwf_loss'
+
+    def forward(self, prediction, target, weight=None, ignore_index=-100):
+        """
+        pred :    shape (N, C, H, W)
+        target :  shape (N, H, W) ground truth
+        return:  loss_acw
+        """
+        assert weight is None
+        pred = F.softmax(prediction, 1)
+        one_hot_label, mask = self.encode_one_hot_label(pred, target)
+
+        # defocal weight: loss larger, weight smaller
+        f_weight = torch.pow(torch.abs(one_hot_label - pred.detach()), self.gamma)   # (n, c, h, w)
+        f_weight /= f_weight.mean()
+
+        # pnc loss
+        acw = self.adaptive_class_weight(pred, one_hot_label, mask)
+
+        err = torch.pow((one_hot_label - pred), 2)
+        pnc = err - ((1. - err + self.eps) / (1. + err + self.eps)).log()
+        loss_pnc = torch.sum(f_weight * acw * pnc, 1)
+
+        # jaccard
+        intersection = torch.sum(pred * one_hot_label, dim=(0, 2, 3))
+
+        cardinality = pred + one_hot_label
+        if mask is not None:
+            cardinality[mask] = 0
+        cardinality = torch.sum(cardinality, dim=(0, 2, 3))
+
+        union = cardinality - intersection
+        jaccard = (intersection + self.eps) / (union + self.eps)
+
+        return loss_pnc.mean() - jaccard.mean().log()
+
+
+@MODELS.register_module()
+class ACWLossV2(nn.Module):
+    def __init__(self,  ini_weight=0, ini_iteration=0, eps=1e-5,
+                 use_sigmoid=False, loss_weight=1.0, ignore_index=255):
+        super(ACWLossV2, self).__init__()
+        self.ignore_index = ignore_index
+        self.weight = ini_weight
+        self.weight_cls = ini_weight
+        self.itr = ini_iteration
+        self.eps = eps
+        self._loss_name = "loss_acw2"
+
+    def forward(self, prediction, target, weight=None, ignore_index=-100):
+        """
+        pred :    shape (N, C, H, W)
+        target :  shape (N, H, W) ground truth
+        return:  loss_acw
+        """
+        assert weight is None
+        pred = F.softmax(prediction, 1)
+        one_hot_label, mask = self.encode_one_hot_label(pred, target)
+
+        acw, acw_cls = self.adaptive_class_weight(pred, one_hot_label, mask)
+
+        err = torch.pow((one_hot_label - pred), 2)
+        # one = torch.ones_like(err)
+
+        pnc = err - ((1. - err + self.eps) / (1. + err + self.eps)).log()
+        loss_pnc = torch.sum(acw * pnc, 1)
+
+
+        intersection = 2 * torch.sum(pred * one_hot_label, dim=(0, 2, 3)) + self.eps
+        union = pred + one_hot_label
+
+        if mask is not None:
+            union[mask] = 0
+
+        union = torch.sum(union, dim=(0, 2, 3)) + self.eps
+        dice = intersection / union
+
+        return loss_pnc.mean() - (acw_cls * dice).mean().log()
+
+    def adaptive_class_weight(self, pred, one_hot_label, mask=None):
+        self.itr += 1
+
+        sum_class = torch.sum(one_hot_label, dim=(0, 2, 3))
+        sum_norm = sum_class / sum_class.sum()
+
+        self.weight = (self.weight * (self.itr - 1) + sum_norm) / self.itr
+        mfb = self.weight.mean() / (self.weight + self.eps)
+        mfb = mfb / (mfb.sum() + self.eps)
+        acw = (1. + pred + one_hot_label) * mfb.unsqueeze(-1).unsqueeze(-1)
+
+        ones_cls = (sum_class > 0).long()
+        self.weight_cls = (self.weight_cls * (self.itr - 1) + ones_cls) / self.itr
+        acw_cls = self.weight_cls.mean() / (self.weight_cls + self.eps)
+
+        if mask is not None:
+            acw[mask] = 0
+
+        # if self.itr % 50 == 1:
+        #     print(acw_cls)
+
+        return acw, acw_cls
+
+    def encode_one_hot_label(self, pred, target):
+        one_hot_label = pred.detach() * 0
+        if self.ignore_index is not None:
+            mask = (target == self.ignore_index)
+            target = target.clone()
+            target[mask] = 0
+            one_hot_label.scatter_(1, target.unsqueeze(1), 1)
+            mask = mask.unsqueeze(1).expand_as(one_hot_label)
+            one_hot_label[mask] = 0
+            return one_hot_label, mask
+        else:
+            one_hot_label.scatter_(1, target.unsqueeze(1), 1)
+            return one_hot_label, None
+
+    @property
+    def loss_name(self):
+        """Loss Name.
+
+        This function must be implemented and will return the name of this
+        loss function. This name will be used to combine different loss items
+        by simple sum operation. In addition, if you want this loss item to be
+        included into the backward graph, `loss_` must be the prefix of the
+        name.
+
+        Returns:
+            str: The name of this loss item.
+        """
+        return self._loss_name
+
+
+
+class Dice(nn.Module):
+    def __init__(self, aux_weights: list = [1, 0.4, 0.4], ignore_label=255):
+        """
+        delta: Controls weight given to FP and FN. This equals to dice score when delta=0.5
+        """
+        super().__init__()
+        self.aux_weights = aux_weights
+        self.ignore_label = ignore_label
+        self.eps = 1e-7
+
+    def _forward(self, preds: Tensor, labels: Tensor) -> Tensor:
+        # preds in shape [B, C, H, W] and labels in shape [B, H, W]
+        labels = labels.clone()
+        num_classes = preds.shape[1]
+        labels[labels == self.ignore_label] = num_classes
+        labels = F.one_hot(labels, num_classes + 1)[:, :, :, :-1]  # (b, h, w, c)
+
+        pre = preds.softmax(dim=1)
+        pre = pre.permute(1, 0, 2, 3).reshape(num_classes, -1)     # (c, -1)
+        lbl = labels.permute(3, 0, 1, 2).reshape(num_classes, -1)            # (c, -1)
+
+        tp = torch.sum(pre * lbl, dim=1)            # (c,)
+        fn = torch.sum(lbl * (1 - pre), dim=1)      # (c,)
+        fp = torch.sum((1 - lbl) * pre, dim=1)      # (c,)
+
+        dice_score = (2 * tp + self.eps) / (2 * tp + fn + fp + self.eps)
+        dice_loss = torch.mean(1 - dice_score)
+
+        return dice_loss
+
+    def forward(self, preds, targets: Tensor) -> Tensor:
+        if isinstance(preds, tuple):
+            return sum([w * self._forward(pred, targets) for (pred, w) in zip(preds, self.aux_weights)])
+        return self._forward(preds, targets)
+
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=1.0, gamma=2.0, reduction='mean', ignore_label=255):
+        """
+        Focal Loss for semantic segmentation.
+
+        Parameters:
+        - alpha: Balancing factor for class imbalance.
+        - gamma: Focusing parameter to reduce the effect of easy samples.
+        - reduction: Specifies the reduction to apply to the output: 'none', 'mean' or 'sum'.
+        """
+        super(FocalLoss, self).__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+        self.reduction = reduction
+        self.ignore_label = ignore_label
+
+    def forward(self, inputs, targets):
+        """
+        Compute the focal loss.
+
+        Parameters:
+        - inputs: Predicted logits (before softmax), shape (N, C, H, W)
+        - targets: Ground truth labels (C) as long tensor, shape (N, H, W)
+        """
+        # 计算 softmax 得到预测的概率分布
+        bce_loss = nn.CrossEntropyLoss(reduction='none', ignore_index=self.ignore_label)(inputs, targets)
+        p_t = torch.exp(-bce_loss)  # 预测为正确类的概率
+
+        # 计算 focal loss
+        focal_loss = self.alpha * (1 - p_t) ** self.gamma * bce_loss
+
+        if self.reduction == 'mean':
+            return focal_loss.mean()
+        elif self.reduction == 'sum':
+            return focal_loss.sum()
+        else:
+            return focal_loss  # 'none'
+
+
+
+@MODELS.register_module()
+class HybridV1(nn.Module):
+    # CE + Dice
+    def __init__(self, ini_weight=0, ini_iteration=0, eps=1e-5,
+                 use_sigmoid=False, loss_weight=1.0, ignore_index=255):
+        super().__init__()
+        self.ignore_label = ignore_index
+        self.criterion_ce = nn.CrossEntropyLoss(ignore_index=ignore_index)
+        self.criterion_dice = Dice(ignore_label=ignore_index)
+        self._loss_name = 'loss_hybridv1'
+
+    def forward(self, preds, labels, weight=None, ignore_index=255):
+        loss_ce = self.criterion_ce(preds, labels)
+        loss_dice = self.criterion_dice(preds, labels)
+        return loss_ce + loss_dice
+
+    @property
+    def loss_name(self):
+        """Loss Name.
+
+        This function must be implemented and will return the name of this
+        loss function. This name will be used to combine different loss items
+        by simple sum operation. In addition, if you want this loss item to be
+        included into the backward graph, `loss_` must be the prefix of the
+        name.
+
+        Returns:
+            str: The name of this loss item.
+        """
+        return self._loss_name
+
+
+@MODELS.register_module()
+class HybridV2(nn.Module):
+    # focal + Dice
+    def __init__(self, ini_weight=0, ini_iteration=0, eps=1e-5,
+                 use_sigmoid=False, loss_weight=1.0, ignore_index=255):
+        super().__init__()
+        self.ignore_label = ignore_index
+        self.criterion_focal = FocalLoss(ignore_label=ignore_index)
+        self.criterion_dice = Dice(ignore_label=ignore_index)
+        self._loss_name = 'loss_hybridv2'
+
+    def forward(self, preds, labels, weight=None, ignore_index=255):
+        loss_focal = self.criterion_focal(preds, labels)
+        loss_dice = self.criterion_dice(preds, labels)
+        return loss_focal + loss_dice
+
+    @property
+    def loss_name(self):
+        """Loss Name.
+
+        This function must be implemented and will return the name of this
+        loss function. This name will be used to combine different loss items
+        by simple sum operation. In addition, if you want this loss item to be
+        included into the backward graph, `loss_` must be the prefix of the
+        name.
+
+        Returns:
+            str: The name of this loss item.
+        """
+        return self._loss_name
+
+# @MODELS.register_module()
+# class HybridV1(nn.Module):
+#     """
+#     CE + dice
+#     """
+#     def __init__(self,  ini_weight=0, ini_iteration=0, eps=1e-5,
+#                  use_sigmoid=False, loss_weight=1.0, ignore_index=255):
+#         super(HybridV1, self).__init__()
+#         self.ignore_index = ignore_index
+#         self.weight = ini_weight
+#         self.itr = ini_iteration
+#         self.eps = eps
+#         self._loss_name = "loss_cedice"
+#         self.ce_critetion = torch.nn.CrossEntropyLoss(ignore_index=ignore_index)
+#
+#     def forward(self, prediction, target, weight=None, ignore_index=-100):
+#         """
+#         pred :    shape (N, C, H, W)
+#         target :  shape (N, H, W) ground truth
+#         return:  loss_acw
+#         """
+#         assert weight is None
+#
+#         ce_loss = self.ce_critetion(prediction, target)
+#
+#         pred = F.softmax(prediction, 1)
+#         # print(target.unique())
+#         one_hot_label, mask = self.encode_one_hot_label(pred, target)
+#
+#         intersection = 2 * torch.sum(pred * one_hot_label, dim=(0, 2, 3)) + self.eps
+#         union = pred + one_hot_label
+#
+#         if mask is not None:
+#             union[mask] = 0
+#
+#         union = torch.sum(union, dim=(0, 2, 3)) + self.eps
+#         dice = intersection / union
+#
+#         return ce_loss - dice.mean().log()
+#
+#     def encode_one_hot_label(self, pred, target):
+#         one_hot_label = pred.detach() * 0
+#         if self.ignore_index is not None:
+#             mask = (target == self.ignore_index)
+#             target = target.clone()
+#             target[mask] = 0
+#             one_hot_label.scatter_(1, target.unsqueeze(1), 1)
+#             mask = mask.unsqueeze(1).expand_as(one_hot_label)
+#             one_hot_label[mask] = 0
+#             return one_hot_label, mask
+#         else:
+#             one_hot_label.scatter_(1, target.unsqueeze(1), 1)
+#             return one_hot_label, None
+#
+#     @property
+#     def loss_name(self):
+#         """Loss Name.
+#
+#         This function must be implemented and will return the name of this
+#         loss function. This name will be used to combine different loss items
+#         by simple sum operation. In addition, if you want this loss item to be
+#         included into the backward graph, `loss_` must be the prefix of the
+#         name.
+#
+#         Returns:
+#             str: The name of this loss item.
+#         """
+#         return self._loss_name
+#
 
 
 @MODELS.register_module()
@@ -396,3 +949,4 @@ class CrossEntropyLoss(nn.Module):
             str: The name of this loss item.
         """
         return self._loss_name
+
