@@ -13,7 +13,7 @@ from .tversky_loss import TverskyLoss
 from .utils import reduce_loss, weight_reduce_loss, weighted_loss
 # custom
 from .cross_entropy_loss import (ACWLoss, ACWJaccardLoss, ACWLossV2, ACWFocalLoss, ACWDefocalLoss, ACWSCELoss,
-                                 HybridV1, HybridV2)
+                                 HybridV1, HybridV2, SymmetricCELoss)
 from .multi_label_acw_loss import MultiLabelBCELoss, MultiLabelACWLoss, MultiLabelJaccardLoss
 
 
@@ -26,6 +26,7 @@ __all__ = [
     # custom
     'ACWLoss', 'ACWJaccardLoss', 'ACWLossV2', 'ACWDefocalLoss', 'ACWFocalLoss', 'ACWSCELoss',
     'MultiLabelBCELoss', 'MultiLabelACWLoss', 'MultiLabelJaccardLoss',
+    'SymmetricCELoss',
     "HybridV1",
     "HybridV2",
 ]

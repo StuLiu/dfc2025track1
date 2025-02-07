@@ -237,6 +237,53 @@ class SCELoss(torch.nn.Module):
         loss = self.alpha * ce + self.beta * rce
         return loss
 
+
+@MODELS.register_module()
+class SymmetricCELoss(nn.Module):
+
+    def __init__(self, alpha=1.0, beta=2.0, loss_name=None, ignore_index: int = 255,
+                 loss_weight=1.0, class_weight=None):
+        super(SymmetricCELoss, self).__init__()
+        self.alpha = alpha  # 控制正向交叉熵的权重
+        self.beta = beta    # 控制反向交叉熵的权重
+        self.ignore_index = ignore_index  # 需要忽略的标签索引
+        self.loss_weight = loss_weight
+        self.class_weight = class_weight
+        self.ce_criterion = nn.CrossEntropyLoss(ignore_index=self.ignore_index, reduction='none')
+        self._loss_name = 'loss_sce' if loss_name is not None else loss_name
+
+    def forward(self, pred, target, weight=None, ignore_index=-100):
+        # 正向交叉熵损失
+        ce_loss = self.ce_criterion(pred, target)
+
+        mask = (target != self.ignore_index)
+        target_masked = target.clone()
+        target_masked[~mask] = pred.size(1)
+
+        if mask.sum() == 0:
+            return torch.tensor(0.0, device=pred.device)
+
+        # 反向交叉熵损失
+        # 首先对预测结果进行 softmax
+        pred_softmax = F.softmax(pred, dim=1)
+        # 对目标进行 one-hot 编码
+        target_one_hot = F.one_hot(target_masked, num_classes=pred.size(1) + 1)[:,:,:,:-1].permute(0, 3, 1, 2).float()
+        # 计算反向交叉熵损失
+        rce_loss = -torch.sum(target_one_hot * torch.log(pred_softmax + 1e-10), dim=1)
+
+        # 结合正向和反向交叉熵损失
+        if target.ndim == 3:
+            mask = mask.unsqueeze(dim=1)
+        loss = mask.int() * (self.alpha * ce_loss + self.beta * rce_loss)
+
+        # 返回平均损失
+        return self.loss_weight * loss.mean()
+
+    @property
+    def loss_name(self):
+        return self._loss_name
+
+
 @MODELS.register_module()
 class ACWSCELoss(nn.Module):
     def __init__(self,  ini_weight=0, ini_iteration=0, eps=1e-5,
