@@ -11,6 +11,7 @@ from mmengine.model import BaseTTAModel
 from mmengine.structures import PixelData
 
 from mmseg.registry import MODELS
+from mmseg.structures import SegDataSample
 from mmseg.utils import SampleList
 import warnings
 import time
