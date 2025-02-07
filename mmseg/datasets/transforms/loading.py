@@ -850,6 +850,58 @@ class LoadTifImageFromFileV3(BaseTransform):
         return repr_str
 
 
+
+@TRANSFORMS.register_module()
+class LoadTifImageFromFileV4(BaseTransform):
+    """Load a Remote Sensing mage from file.
+
+    Required Keys:
+
+    - img_path
+
+    Modified Keys:
+
+    - img
+    - img_shape
+    - ori_shape
+
+    Args:
+        to_float32 (bool): Whether to convert the loaded image to a float32
+            numpy array. If set to False, the loaded image is a float64 array.
+            Defaults to True.
+    """
+
+    def __init__(self, to_float32: bool = True):
+        self.to_float32 = to_float32
+
+    def transform(self, results: Dict) -> Dict:
+        """Functions to load image.
+
+        Args:
+            results (dict): Result dict from :obj:``mmcv.BaseDataset``.
+
+        Returns:
+            dict: The dict contains loaded image and meta information.
+        """
+
+        filename = results['img_path']
+        img = sio.imread(filename)      # (h, w)
+        img = np.stack([img, img, img], axis=-1)          # r-r-r
+
+        if self.to_float32:
+            img = img.astype(np.float32)
+
+        results['img'] = img
+        results['img_shape'] = img.shape[:2]
+        results['ori_shape'] = img.shape[:2]
+        return results
+
+    def __repr__(self):
+        repr_str = (f'{self.__class__.__name__}('
+                    f'to_float32={self.to_float32})')
+        return repr_str
+
+
 @TRANSFORMS.register_module()
 class LoadMultipleRSImageFromFile(BaseTransform):
     """Load two Remote Sensing mage from file.

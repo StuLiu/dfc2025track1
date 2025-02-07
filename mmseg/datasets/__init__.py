@@ -28,6 +28,8 @@ from .stare import STAREDataset
 from .synapse import SynapseDataset
 from .agriculture_vision import AgricultureVisionDataset, MultiLabelAgricultureVisionDataset
 from .mmseg_yreb import MMSegYREBDataset
+from .dfc2025sarseg import DFC2025SarSegDataset
+
 
 # yapf: disable
 from .transforms import (CLAHE, AdjustGamma, Albu, BioMedical3DPad,
@@ -69,5 +71,5 @@ __all__ = [
     'NYUDataset', 'HSIDrive20Dataset',
     # custom
     'AgricultureVisionDataset', 'MultiLabelAgricultureVisionDataset',
-    'FBPDataset', 'MMSegYREBDataset',
+    'FBPDataset', 'MMSegYREBDataset', 'DFC2025SarSegDataset',
 ]

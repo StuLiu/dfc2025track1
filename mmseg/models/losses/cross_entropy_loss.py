@@ -877,7 +877,8 @@ class CrossEntropyLoss(nn.Module):
                  class_weight=None,
                  loss_weight=1.0,
                  loss_name='loss_ce',
-                 avg_non_ignore=False):
+                 avg_non_ignore=False,
+                 ignore_index=255):
         super().__init__()
         assert (use_sigmoid is False) or (use_mask is False)
         self.use_sigmoid = use_sigmoid
@@ -886,6 +887,7 @@ class CrossEntropyLoss(nn.Module):
         self.loss_weight = loss_weight
         self.class_weight = get_class_weight(class_weight)
         self.avg_non_ignore = avg_non_ignore
+        self.ignore_index = ignore_index
         if not self.avg_non_ignore and self.reduction == 'mean':
             warnings.warn(
                 'Default ``avg_non_ignore`` is False, if you would like to '
@@ -931,7 +933,7 @@ class CrossEntropyLoss(nn.Module):
             reduction=reduction,
             avg_factor=avg_factor,
             avg_non_ignore=self.avg_non_ignore,
-            ignore_index=ignore_index,
+            ignore_index=self.ignore_index,
             **kwargs)
         return loss_cls
 
