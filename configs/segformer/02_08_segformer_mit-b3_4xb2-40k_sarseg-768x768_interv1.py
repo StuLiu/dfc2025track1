@@ -56,10 +56,7 @@ train_dataloader = dict(
     batch_size=2,
     num_workers=8,
     dataset = dict(
-        type=dataset_type,
-        data_root=data_root,
         data_prefix=dict(
-            img_path='train/sar_images',
             seg_map_path='train/labels_pl/labels_intersection'
         )
     )

@@ -52,15 +52,7 @@ param_scheduler = [
     )
 ]
 
-train_dataloader = dict(
-    batch_size=2,
-    num_workers=8,
-    dataset = dict(
-        data_prefix=dict(
-            seg_map_path='train/labels_pl/labels_intersection'
-        )
-    )
-)
+train_dataloader = dict(batch_size=2, num_workers=8)
 val_dataloader = dict(batch_size=1, num_workers=4)
 test_dataloader = dict(batch_size=1, num_workers=4)
 
