@@ -285,6 +285,54 @@ class SymmetricCELoss(nn.Module):
 
 
 @MODELS.register_module()
+class GeneralizedCELoss(nn.Module):
+
+    def __init__(self, q=0.7, loss_name=None, ignore_index: int = 255,
+                 loss_weight=1.0, class_weight=None):
+        super(GeneralizedCELoss, self).__init__()
+        self.q = q
+        self.ignore_index = ignore_index  # 需要忽略的标签索引
+        self.loss_weight = loss_weight
+        self.class_weight = class_weight
+        self._loss_name = 'loss_gce' if loss_name is not None else loss_name
+
+    def forward(self, pred, target, weight=None, ignore_index=-100):
+        """
+        Args:
+           pred: 模型的预测输出，形状为 (bs, num_classes, h, w)
+           target: 真实标签，形状为 (bs, h, w)
+        Returns:
+           loss: 计算得到的 GCE 损失
+        """
+        c = pred.size(1)
+        pred = pred.permute(0, 2, 3, 1).reshape(-1, c).contiguous()
+        target = target.view(-1).contiguous()
+
+        mask = (target != self.ignore_index)
+        pred = pred[mask]
+        target = target[mask]
+
+        # 将 target 转换为 one-hot 编码
+        target_onehot = F.one_hot(target, num_classes=c).float()    # (n, num_classes)
+
+        # 计算预测概率
+        pred_prob = F.softmax(pred, dim=1)  # (n, num_classes)
+
+        # 提取真实标签对应的预测概率
+        pred_prob_y = torch.sum(pred_prob * target_onehot, dim=1)   # (n, )
+
+        # 计算 GCE 损失
+        loss = (1 - torch.pow(pred_prob_y, self.q)) / self.q        # (n, )
+
+        # 返回平均损失
+        return loss.mean()
+
+    @property
+    def loss_name(self):
+        return self._loss_name
+
+
+@MODELS.register_module()
 class ACWSCELoss(nn.Module):
     def __init__(self,  ini_weight=0, ini_iteration=0, eps=1e-5,
                  use_sigmoid=False, loss_weight=1.0, ignore_index=255):
