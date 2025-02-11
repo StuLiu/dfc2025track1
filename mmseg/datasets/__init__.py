@@ -29,6 +29,7 @@ from .synapse import SynapseDataset
 from .agriculture_vision import AgricultureVisionDataset, MultiLabelAgricultureVisionDataset
 from .mmseg_yreb import MMSegYREBDataset
 from .dfc2025sarseg import DFC2025SarSegDataset
+from .open_earth_map import OpenEarthMapDataset
 
 
 # yapf: disable
@@ -71,5 +72,5 @@ __all__ = [
     'NYUDataset', 'HSIDrive20Dataset',
     # custom
     'AgricultureVisionDataset', 'MultiLabelAgricultureVisionDataset',
-    'FBPDataset', 'MMSegYREBDataset', 'DFC2025SarSegDataset',
+    'FBPDataset', 'MMSegYREBDataset', 'DFC2025SarSegDataset', 'OpenEarthMapDataset',
 ]
