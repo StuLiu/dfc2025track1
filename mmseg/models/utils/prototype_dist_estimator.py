@@ -16,7 +16,11 @@ import torch.distributed as dist
 
 class DownscaleLabel(nn.Module):
 
-    def __init__(self, scale_factor=32, n_classes=19, ignore_label=255, min_ratio=0.75):
+    def __init__(self,
+                 scale_factor=32,
+                 n_classes=19,
+                 ignore_label=255,
+                 min_ratio=0.75):
         super().__init__()
         assert scale_factor >= 1
         self.scale_factor = scale_factor
@@ -50,16 +54,22 @@ class DownscaleLabel(nn.Module):
 
 
 class Prototypes(nn.Module):
-    def __init__(self, num_classes, feat_channels, scale_factor=32, ignore_index=255, momentum=0.999, resume="", debug=False):
+    def __init__(self,
+                 num_classes,
+                 feat_channels,
+                 scale_factor=32,
+                 ignore_index=255,
+                 momentum=0.999,
+                 resume="",
+                 debug=False):
         super(Prototypes, self).__init__()
         self.feature_num = feat_channels
         self.class_num = num_classes
         self.ignore_index = ignore_index
         self.momentum = momentum
         self.debug = debug
-        # init prototype
         self.iter = 0
-        self.init(resume=resume)
+
         self.downer = DownscaleLabel(
             scale_factor=scale_factor,
             n_classes=num_classes,
@@ -67,7 +77,7 @@ class Prototypes(nn.Module):
             min_ratio=0.75
         )
 
-    def init(self, resume=""):
+        # init prototype
         if resume:
             print("Loading checkpoint from {}".format(resume))
             checkpoint = torch.load(resume, map_location=torch.device('cpu'))
@@ -78,9 +88,12 @@ class Prototypes(nn.Module):
         # self.proto = nn.Parameter(proto)
         self.register_buffer("proto", proto)
 
-    def update(self, features, labels):
+    def update(self, features, labels, logits=None):
         if features.ndim == 4:
             features = features.permute(0, 2, 3, 1).reshape(-1, self.feature_num).contiguous()
+
+        # if logits is not None:
+        #     logits = tnf.interpolate(logits, size=features.shape[-2:], mode='bilinear', align_corners=False)
 
         labels = self.downer(labels)
         labels = labels.view(-1).contiguous()
@@ -100,8 +113,8 @@ class Prototypes(nn.Module):
         counts = onehot.sum(0)
         proto_curr = features.sum(0) / (counts + 1e-5)
         # avoid zero updating
-        zero_mask = (counts == 0).int()     # (c, k)
-        proto_curr = (1 - zero_mask) * proto_curr + zero_mask * self.proto.data
+        zero_mask = (counts == 0)  # (c, k)
+        proto_curr[zero_mask] = self.proto.data[zero_mask]
 
         # ema update
         self.proto.data = self.ema(self.proto.data, proto_curr, self.momentum)
@@ -111,21 +124,22 @@ class Prototypes(nn.Module):
             dist.all_reduce(self.proto.data, op=dist.ReduceOp.SUM)  # 先求和
             self.proto.data /= dist.get_world_size()  # 再除以进程数，得到平均值
 
-        if self.debug and (self.iter - 1) % 1000 == 0:
+        if self.debug and (self.iter - 1) % 500 == 0:
             print(self.proto.data[:, :5])
 
     def ema(self, history, curr, alpha):
         self.iter += 1
         if 1 - (1 / self.iter) < alpha:
             alpha = 1 - (1 / self.iter)
-        if self.debug and (self.iter - 1) % 1000 == 0:
-            print(alpha)
+        # if self.debug and (self.iter - 1) % 1000 == 0:
+        #     print(alpha)
         return alpha * history + (1 - alpha) * curr
 
     def save(self, out_path):
         torch.save({'proto': self.proto.data.cpu()}, out_path)
 
-    def _cosine_similarity_matrix(self, tensor_a, tensor_b):
+    @staticmethod
+    def _cosine_similarity_matrix(tensor_a, tensor_b):
         # 计算余弦相似度矩阵
         norm_a = tnf.normalize(tensor_a, p=2, dim=1)  # 对 tensor_a 做归一化
         norm_b = tnf.normalize(tensor_b, p=2, dim=1)  # 对 tensor_b 做归一化
@@ -141,9 +155,11 @@ class Prototypes(nn.Module):
 
 
 if __name__ == '__main__':
-    ps = Prototypes(9, 1024, 1,0, momentum=0.99, debug=True).cuda()
-    feats = torch.rand((2, 1024, 32, 32)).cuda()
-    labels = torch.randint(0, 9, (2, 32, 32)).cuda()
+    ps = Prototypes(9, 1024, 1, 0,
+                    momentum=0.99, debug=True).cuda()
+    feats_ = torch.rand((2, 1024, 32, 32)).cuda()
+    labels_ = torch.randint(0, 9, (2, 32, 32)).cuda()
     for i in range(200):
-        ps.update(feats, labels)
-        ps.sync()
+        ps.update(feats_, labels_)
+        if i == 0:
+            feats_ = feats_ * 2

@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from torch import Tensor
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from mmseg.registry import MODELS
 from mmseg.utils import (ConfigType, OptConfigType, OptMultiConfig,
@@ -85,8 +85,10 @@ class EncoderDecoderPrototypeLearning(EncoderDecoder):
                  data_preprocessor: OptConfigType = None,
                  pretrained: Optional[str] = None,
                  init_cfg: OptMultiConfig = None,
-                 prototype_cfg=None,
-                 warmup_iters=0,
+                 prototype_cfg: Dict = None,
+                 warmup_iters: int = 0,
+                 loss_weight_proto: float = 1,
+                 threshold: float = 0.968
                  ):
         super().__init__(backbone, decode_head, neck, auxiliary_head, train_cfg, test_cfg,
                          data_preprocessor, pretrained, init_cfg)
@@ -97,33 +99,51 @@ class EncoderDecoderPrototypeLearning(EncoderDecoder):
 
         self.warmup_iters = warmup_iters if isinstance(warmup_iters, int) else 0
         self.iter = 0
+        self.loss_weight_proto = loss_weight_proto
+        self.threshold = threshold
+        self.debug = prototype_cfg.get('debug', False)
 
-    def _stack_batch_gt(self, data_samples: SampleList) -> Tensor:
+    @staticmethod
+    def _stack_batch_gt(data_samples: SampleList) -> Tensor:
         gt_semantic_segs = [
             data_sample.gt_sem_seg.data for data_sample in data_samples
         ]
         return torch.stack(gt_semantic_segs, dim=0)
 
-    def _revert_batch_gt(self, data_samples: SampleList, gts: Tensor) -> SampleList:
+    @staticmethod
+    def _revert_batch_gt(data_samples: SampleList, gts: Tensor) -> SampleList:
         data_samples_copy = copy.deepcopy(data_samples)
         for data_sample, gt in zip(data_samples_copy, gts):
             gt_sem_seg = PixelData(data=gt)
             data_sample.gt_sem_seg = gt_sem_seg
         return data_samples_copy
 
-    def _prototype_training(self, data_samples, seg_logits: List[Tensor], features: Tensor) -> dict:
+    def _prototype_training(self, data_samples, annotations, seg_logits: List[Tensor], features: Tensor) -> dict:
         """Run forward function and calculate loss for decode head in
         training."""
         losses = dict()
 
+        # generate pseudo_labels
         # pseudo_labels = seg_logits.argmax(dim=1)
         cosine_sim = self.prototype.similarity_cosine(features)
-        pseudo_labels = cosine_sim.argmax(dim=1)
+        cosine_sim = F.interpolate(cosine_sim, size=annotations.shape[-2:], mode='bilinear', align_corners=False)
+        pseudo_labels = cosine_sim.argmax(dim=1).unsqueeze(dim=1)
+        pseudo_labels[pseudo_labels != annotations] = self.prototype.ignore_index
+
+        if self.debug and self.iter % 500 == 0:
+            percent_valide = (pseudo_labels != self.prototype.ignore_index).sum() / pseudo_labels.numel()
+            print(f'valid percentage {(pseudo_labels != self.prototype.ignore_index).sum()} '
+                  f'/ {pseudo_labels.numel()} = {percent_valide * 100:.2f}%')
 
         data_samples = self._revert_batch_gt(data_samples, pseudo_labels)
-        loss_decode_main = self.decode_head.loss_by_feat(seg_logits, data_samples)
+        loss_decode_proto = self.decode_head.loss_by_feat(seg_logits, data_samples)
 
-        losses.update(loss_decode_main)
+        # re-weight the prototype loss
+        for k in loss_decode_proto.keys():
+            if 'loss' in k:
+                loss_decode_proto[k] = loss_decode_proto[k] * self.loss_weight_proto
+
+        losses.update(loss_decode_proto)
         return losses
 
     def loss(self, inputs: Tensor, data_samples: SampleList) -> dict:
@@ -144,11 +164,11 @@ class EncoderDecoderPrototypeLearning(EncoderDecoder):
         # forward backbone
         feats = self.extract_feat(inputs)
 
-        # update prototypes
-        self.prototype.update(feats[-1], annotations)
-
         # forward seg head
         seg_logits = self.decode_head.forward(feats)
+
+        # update prototypes
+        self.prototype.update(feats[-1], annotations, seg_logits)
 
         # decode main loss for segmentation
         loss_decode_main = self.decode_head.loss_by_feat(seg_logits, data_samples)
@@ -156,7 +176,7 @@ class EncoderDecoderPrototypeLearning(EncoderDecoder):
 
         if self.iter >= self.warmup_iters:
             # decode prototypical learning loss for segmentation
-            loss_decode_proto = self._prototype_training(data_samples, seg_logits, feats[-1])
+            loss_decode_proto = self._prototype_training(data_samples, annotations, seg_logits, feats[-1])
             losses.update(add_prefix(loss_decode_proto, 'decode.proto'))
 
         # the same as the origin auxiliary decode head
@@ -166,3 +186,37 @@ class EncoderDecoderPrototypeLearning(EncoderDecoder):
 
         self.iter += 1
         return losses
+
+    # def _prototype_training(self, data_samples, seg_logits: List[Tensor], features: Tensor) -> dict:
+    #     """Run forward function and calculate loss for decode head in
+    #     training."""
+    #     losses = dict()
+    #
+    #     # generate pseudo_labels
+    #     # pseudo_labels = seg_logits.argmax(dim=1)
+    #     cosine_sim = self.prototype.similarity_cosine(features)
+    #     cosine_sim = F.interpolate(cosine_sim, size=seg_logits.shape[-2:], mode='bilinear', align_corners=False)
+    #     cosine_sim_softmax = torch.softmax(cosine_sim, dim=1)
+    #     max_probs, pseudo_labels = cosine_sim_softmax.max(dim=1)
+    #     pseudo_labels[max_probs < self.threshold] = self.prototype.ignore_index
+    #
+    #     if self.debug and self.iter % 500 == 0:
+    #         percent_valide = (max_probs >= self.threshold).sum() / pseudo_labels.numel()
+    #         print(f'valid percentage {(max_probs >= self.threshold).sum()} '
+    #               f'/ {pseudo_labels.numel()} = {percent_valide * 100:.2f}%')
+    #         thres = [0, 0.2, 0.4, 0.6, 0.8, 0.9, 0.95, 1]
+    #         for th in thres:
+    #             percent_valide = (max_probs >= th).sum() / pseudo_labels.numel()
+    #             print(f'{th:1.3f}\t : valid percentage {(max_probs >= th).sum()} '
+    #                   f'/ {pseudo_labels.numel()} = {percent_valide * 100:.2f}%')
+    #
+    #     data_samples = self._revert_batch_gt(data_samples, pseudo_labels)
+    #     loss_decode_proto = self.decode_head.loss_by_feat(seg_logits, data_samples)
+    #
+    #     # re-weight the prototype loss
+    #     for k in loss_decode_proto.keys():
+    #         if 'loss' in k:
+    #             loss_decode_proto[k] = loss_decode_proto[k] * self.loss_weight_proto
+    #
+    #     losses.update(loss_decode_proto)
+    #     return losses
