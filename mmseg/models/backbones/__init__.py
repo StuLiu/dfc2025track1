@@ -25,6 +25,7 @@ from .unet import UNet
 from .vit import VisionTransformer
 from .vpd import VPD
 from .lsknet import LSKNet
+from .dinov2 import DinoV2
 
 
 __all__ = [
@@ -35,6 +36,6 @@ __all__ = [
     'SVT', 'STDCNet', 'STDCContextPathNet', 'BEiT', 'MAE', 'PIDNet', 'MSCAN',
     'DDRNet', 'VPD',
     #################### custom ####################
-    'LSKNet',
+    'LSKNet', 'DinoV2'
     ################################################
 ]
