@@ -296,19 +296,17 @@ class GeneralizedCELoss(nn.Module):
         self.class_weight = class_weight
         self._loss_name = 'loss_gce' if loss_name is not None else loss_name
 
+        assert self.q > 0, "q must be greater than 0 to avoid division by zero"
+
     def forward(self, pred, target, weight=None, ignore_index=-100):
-        """
-        Args:
-           pred: 模型的预测输出，形状为 (bs, num_classes, h, w)
-           target: 真实标签，形状为 (bs, h, w)
-        Returns:
-           loss: 计算得到的 GCE 损失
-        """
         c = pred.size(1)
         pred = pred.permute(0, 2, 3, 1).reshape(-1, c).contiguous()
         target = target.view(-1).contiguous()
 
         mask = (target != self.ignore_index)
+        if mask.sum() == 0:  # Avoid empty tensors
+            return torch.tensor(0.0, device=pred.device)
+
         pred = pred[mask]
         target = target[mask]
 
@@ -317,9 +315,11 @@ class GeneralizedCELoss(nn.Module):
 
         # 计算预测概率
         pred_prob = F.softmax(pred, dim=1)  # (n, num_classes)
+        pred_prob = torch.clamp(pred_prob, min=1e-6, max=1.0)  # Clamp to avoid extreme values
 
         # 提取真实标签对应的预测概率
         pred_prob_y = torch.sum(pred_prob * target_onehot, dim=1)   # (n, )
+        pred_prob_y = torch.clamp(pred_prob_y, min=1e-6)  # Prevent pow(0)
 
         # 计算 GCE 损失
         loss = (1 - torch.pow(pred_prob_y, self.q)) / self.q        # (n, )
