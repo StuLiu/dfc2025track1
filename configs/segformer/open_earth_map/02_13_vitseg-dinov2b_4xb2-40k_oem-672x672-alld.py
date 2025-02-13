@@ -1,8 +1,8 @@
 _base_ = [
-    '../../_base_/models/fcn_dinov2-b.py', '../../_base_/datasets/open_earth_map_770x770.py',
+    '../../_base_/models/vitseg_dinov2-b.py', '../../_base_/datasets/open_earth_map_672x672.py',
     '../../_base_/default_runtime.py', '../../_base_/schedules/schedule_40k.py'
 ]
-crop_size = (770, 770)
+crop_size = (672, 672)
 data_preprocessor = dict(
     size=crop_size,
     seg_pad_val=0,
@@ -45,7 +45,7 @@ param_scheduler = [
     )
 ]
 
-find_unused_parameters=True
+find_unused_parameters = True
 
 train_dataloader = dict(batch_size=2, num_workers=8)
 val_dataloader = dict(batch_size=1, num_workers=4)

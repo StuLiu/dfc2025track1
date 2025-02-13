@@ -1,8 +1,8 @@
 _base_ = [
-    '../../_base_/models/fcn_dinov2-b.py', '../../_base_/datasets/open_earth_map_672x672.py',
-    '../../_base_/default_runtime.py', '../../_base_/schedules/schedule_40k.py'
+    '../_base_/models/vitseg_dinov2-b.py', '../_base_/datasets/dfc2025sarseg770x770.py',
+    '../_base_/default_runtime.py', '../_base_/schedules/schedule_40k.py'
 ]
-crop_size = (672, 672)
+crop_size = (770, 770)
 data_preprocessor = dict(
     size=crop_size,
     seg_pad_val=0,
@@ -15,7 +15,7 @@ model = dict(
     ),
     decode_head=dict(
         loss_decode=[
-            dict(type='CrossEntropyLoss', loss_name='loss_ce', loss_weight=1.0, ignore_index=255, avg_non_ignore=True)
+            dict(type='CrossEntropyLoss', loss_name='loss_ce', loss_weight=1.0, ignore_index=0, avg_non_ignore=True)
         ]
     )
 )
@@ -27,7 +27,7 @@ optim_wrapper = dict(
         type='AdamW', lr=0.00006, betas=(0.9, 0.999), weight_decay=0.01),
     paramwise_cfg=dict(
         custom_keys={
-            'pos_embed': dict(decay_mult=0.),#pos_block
+            'pos_embed': dict(decay_mult=0.),  # pos_block
             'norm': dict(decay_mult=0.),
             'head': dict(lr_mult=10.)
         }))
@@ -45,7 +45,7 @@ param_scheduler = [
     )
 ]
 
-find_unused_parameters=True
+find_unused_parameters = True
 
 train_dataloader = dict(batch_size=2, num_workers=8)
 val_dataloader = dict(batch_size=1, num_workers=4)
