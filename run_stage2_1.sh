@@ -1,11 +1,11 @@
 
 
-export CUDA_VISIBLE_DEVICES=4,5,6,7
+export CUDA_VISIBLE_DEVICES=0,1,2,3
 n_gpu=4
 
-name='02_14_segformer_mit-b5_4xb2-160k_sarseg-768x768_interv1_ignore255_gce-lovasz'
-bash tools/dist_train.sh configs/_dfc_stage2/${name}.py ${n_gpu}
-bash tools/dist_test.sh configs/_dfc_stage2/${name}.py work_dirs/${name}/iter_160000.pth ${n_gpu} \
+name='02_14_segformer_mit-b3_4xb2-40k_sarseg-768x768_official_lovasz'
+bash tools/dist_train2.sh configs/_dfc_stage2/${name}.py ${n_gpu}
+bash tools/dist_test2.sh configs/_dfc_stage2/${name}.py work_dirs/${name}/iter_40000.pth ${n_gpu} \
   --out submits/_dfc_stage2/${name}_tta --tta
 cd submits/_dfc_stage2/${name}_tta || exit
 zip -r ../mmseg_${name}_tta.zip ./*.png
