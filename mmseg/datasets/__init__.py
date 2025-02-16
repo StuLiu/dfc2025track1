@@ -30,6 +30,7 @@ from .agriculture_vision import AgricultureVisionDataset, MultiLabelAgricultureV
 from .mmseg_yreb import MMSegYREBDataset
 from .dfc2025sarseg import DFC2025SarSegDataset
 from .open_earth_map import OpenEarthMapDataset
+from .uda_datasets import UDADataset
 
 
 # yapf: disable
@@ -73,4 +74,5 @@ __all__ = [
     # custom
     'AgricultureVisionDataset', 'MultiLabelAgricultureVisionDataset',
     'FBPDataset', 'MMSegYREBDataset', 'DFC2025SarSegDataset', 'OpenEarthMapDataset',
+    'UDADataset',
 ]

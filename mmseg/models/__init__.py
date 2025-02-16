@@ -9,8 +9,11 @@ from .losses import *  # noqa: F401,F403
 from .necks import *  # noqa: F401,F403
 from .segmentors import *  # noqa: F401,F403
 from .text_encoder import *  # noqa: F401,F403
+from  .distributed import UDA_MMDistributedDataParallel
+
 
 __all__ = [
     'BACKBONES', 'HEADS', 'LOSSES', 'SEGMENTORS', 'build_backbone',
-    'build_head', 'build_loss', 'build_segmentor', 'SegDataPreProcessor', 'SegDataPreProcessorV2'
+    'build_head', 'build_loss', 'build_segmentor', 'SegDataPreProcessor', 'SegDataPreProcessorV2',
+    'UDA_MMDistributedDataParallel',
 ]

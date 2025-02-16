@@ -221,6 +221,43 @@ class EncoderDecoder(BaseSegmentor):
 
         return self.postprocess_result(seg_logits, data_samples)
 
+    def predict_logits(self,
+                inputs: Tensor,
+                data_samples: OptSampleList = None) -> SampleList:
+        """Predict results from a batch of inputs and data samples with post-
+        processing.
+
+        Args:
+            inputs (Tensor): Inputs with shape (N, C, H, W).
+            data_samples (List[:obj:`SegDataSample`], optional): The seg data
+                samples. It usually includes information such as `metainfo`
+                and `gt_sem_seg`.
+
+        Returns:
+            list[:obj:`SegDataSample`]: Segmentation results of the
+            input images. Each SegDataSample usually contain:
+
+            - ``pred_sem_seg``(PixelData): Prediction of semantic segmentation.
+            - ``seg_logits``(PixelData): Predicted logits of semantic
+                segmentation before normalization.
+        """
+        if data_samples is not None:
+            batch_img_metas = [
+                data_sample.metainfo for data_sample in data_samples
+            ]
+        else:
+            batch_img_metas = [
+                dict(
+                    ori_shape=inputs.shape[2:],
+                    img_shape=inputs.shape[2:],
+                    pad_shape=inputs.shape[2:],
+                    padding_size=[0, 0, 0, 0])
+            ] * inputs.shape[0]
+
+        seg_logits = self.inference(inputs, batch_img_metas)
+
+        return seg_logits
+
     def _forward(self,
                  inputs: Tensor,
                  data_samples: OptSampleList = None) -> Tensor:

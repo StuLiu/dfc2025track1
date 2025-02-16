@@ -68,6 +68,8 @@ class SegDataPreProcessor(BaseDataPreprocessor):
         test_cfg: dict = None,
     ):
         super().__init__()
+        self._mean = mean
+        self._std = std
         self.size = size
         self.size_divisor = size_divisor
         self.pad_val = pad_val
@@ -149,7 +151,13 @@ class SegDataPreProcessor(BaseDataPreprocessor):
             else:
                 inputs = torch.stack(inputs, dim=0)
 
+        for data_sample in data_samples:
+            data_sample.set_metainfo({
+                'mean': self._mean,
+                'std': self._std
+            })
         return dict(inputs=inputs, data_samples=data_samples)
+
 
 class ComposeBatchAug:
 
