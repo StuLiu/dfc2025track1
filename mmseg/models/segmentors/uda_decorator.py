@@ -62,6 +62,7 @@ class UDADecorator(BaseSegmentor):
         self.train_cfg = segmentor_cfg['train_cfg']
         self.test_cfg = segmentor_cfg['test_cfg']
 
+        self.out_channels = segmentor_cfg['decode_head']['num_classes']
         self.iter = 0
 
     def get_student(self):
@@ -105,8 +106,6 @@ class UDADecorator(BaseSegmentor):
             else:
                 ema_param.data[:] = ema(ema_param[:].data[:],
                                         param[:].data[:], alpha)
-        if dist.is_available() and dist.get_world_size() > 1 and curr_iter % 10 == 0:
-            self.sync_ema_weights()
 
     def print_teacher_params(self):
         for name, param in self.get_teacher().named_parameters():

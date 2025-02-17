@@ -51,20 +51,6 @@ def renorm_(img, mean, std):
     img.mul_(255.0).sub_(mean).div_(std)
 
 
-def one_mix(mask, data=None, target=None):
-    if mask is None:
-        return data, target
-    if not (data is None):
-        stackedMask0, _ = torch.broadcast_tensors(mask[0], data[0])
-        data = (stackedMask0 * data[0] +
-                (1 - stackedMask0) * data[1]).unsqueeze(0)
-    if not (target is None):
-        stackedMask0, _ = torch.broadcast_tensors(mask[0], target[0])
-        target = (stackedMask0 * target[0] +
-                  (1 - stackedMask0) * target[1]).unsqueeze(0)
-    return data, target
-
-
 def color_jitter(color_jitter, mean, std, data=None, target=None, s=.25, p=.2):
     # s is the strength of colorjitter
     if not (data is None):
@@ -104,7 +90,7 @@ def gaussian_blur(blur, data=None, target=None):
 
 
 @MODELS.register_module()
-class DACS(UDADecorator):
+class SSL(UDADecorator):
 
     def __init__(
             self,
@@ -127,7 +113,7 @@ class DACS(UDADecorator):
             print_grad_magnitude=False,
             debug=False,
     ):
-        super(DACS, self).__init__(segmentor, data_preprocessor)
+        super(SSL, self).__init__(segmentor, data_preprocessor)
         self.debug = debug
         self.local_iter = 0
         self.alpha = alpha
@@ -222,8 +208,8 @@ class DACS(UDADecorator):
             # ###################### #
             losses_src = self._run_forward(data_src, mode='loss')
             losses_parsed_src, log_vars_src = self.parse_losses(losses_src)
-            # parsed_losses += losses_parsed_src
-            log_vars.update(log_vars_src)
+            for loss_name, loss_val in log_vars_src.items():
+                log_vars[f'{loss_name}_src'] = loss_val
             optim_wrapper.update_params(losses_parsed_src)
 
             # ###################### #
@@ -242,47 +228,30 @@ class DACS(UDADecorator):
                 'mean': means[0].unsqueeze(dim=0),  # assume same normalization
                 'std': stds[0].unsqueeze(dim=0)
             }
+
             # get pseudo labels
             imgs_tgt_origin = data_tgt['inputs'].clone()
             with torch.no_grad():
                 seg_logits = self.get_teacher().predict_logits(data_tgt['inputs'], data_tgt['data_samples']).detach()
+            seg_map_teacher = seg_logits.argmax(dim=1)
             pseudo_label, pseudo_weight = self.get_pseudo_label_and_weight(seg_logits)
             # pseudo_weight = self.filter_valid_pseudo_region(pseudo_weight)
-            gt_pixel_weight = torch.ones(pseudo_weight.shape).to(pseudo_weight.device)
+            # gt_pixel_weight = torch.ones(pseudo_weight.shape).to(pseudo_weight.device)
 
-            # Apply mixing
-            mixed_img, mixed_lbl = [None] * batch_size, [None] * batch_size
-            mixed_seg_weight = pseudo_weight.clone()
-            gt_semantic_seg = self._stack_batch_gt(data_src['data_samples'])
-            mix_masks = self.get_class_masks(gt_semantic_seg)
-            # # class-mixing for imgs with the same index in a mini-batch
-            for i in range(batch_size):
-                strong_parameters['mix'] = mix_masks[i]
-                mixed_img[i], mixed_lbl[i] = self.strong_transform(
-                    strong_parameters,
-                    data=torch.stack((data_src['inputs'][i], data_tgt['inputs'][i])),
-                    target=torch.stack(
-                        (gt_semantic_seg[i][0], pseudo_label[i])))
-                _, mixed_seg_weight[i] = self.strong_transform(
-                    strong_parameters,
-                    target=torch.stack((gt_pixel_weight[i], pseudo_weight[i])))
-            mixed_img = torch.cat(mixed_img)
-            mixed_lbl = torch.cat(mixed_lbl)
+            # apply strong augs
+            data_tgt['inputs'], pseudo_label = self.strong_transform(
+                strong_parameters,
+                data=data_tgt['inputs'],
+                target=pseudo_label
+            )
+            data_tgt['data_samples'] = self._revert_batch_gt(data_tgt['data_samples'], pseudo_label)
 
-            data_tgt['inputs'] = mixed_img
-            data_tgt['data_samples'] = self._revert_batch_gt(data_tgt['data_samples'], mixed_lbl)
-
+            # forward and backward
             losses_tgt = self._run_forward(data_tgt, mode='loss')
             losses_parsed_tgt, log_vars_tgt = self.parse_losses(losses_tgt)
+            for loss_name, loss_val in log_vars_tgt.items():
+                log_vars[f'{loss_name}_tgt'] = loss_val
             optim_wrapper.update_params(losses_parsed_tgt)
-            log_vars.update(log_vars_tgt)
-            # losses =
-            # # merge source and target data
-            # data_merged = {
-            #     'inputs': torch.cat([data_src['inputs'], data_tgt['inputs']], dim=0),
-            #     'data_samples': data_src['data_samples'] + data_tgt['data_samples']
-            # }
-            # losses = self._run_forward(data_merged, mode='loss')  # type: ignore
 
         if self.debug and (self.iter == 1 or self.iter % self.debug_img_interval == 0):
             self.print_teacher_params()
@@ -296,12 +265,11 @@ class DACS(UDADecorator):
                 lbl_src_0_vis = render_segmentation_cv2(lbl_src_0_vis, get_palettes(self.palette))[:, :, ::-1]
 
                 img_tgt_0_origin = img_tensor2cv2(imgs_tgt_origin[0, :3, :, :].cpu())
-                pseudo_label_0_vis = pseudo_label[0].squeeze().cpu().numpy().astype(np.uint8)
+                pseudo_label_0_vis = seg_map_teacher[0].squeeze().cpu().numpy().astype(np.uint8)
                 pseudo_label_0_vis = render_segmentation_cv2(pseudo_label_0_vis, get_palettes(self.palette))[:, :, ::-1]
 
                 img_tgt_0 = img_tensor2cv2(data_tgt['inputs'][0, :3, :, :].cpu())
-                lbl_tgt = self._stack_batch_gt(data_tgt['data_samples'])
-                lbl_tgt_0_vis = lbl_tgt[0, :, :].squeeze().cpu().numpy().astype(np.uint8)
+                lbl_tgt_0_vis = pseudo_label[0, :, :].squeeze().cpu().numpy().astype(np.uint8)
                 lbl_tgt_0_vis = render_segmentation_cv2(lbl_tgt_0_vis, get_palettes(self.palette))[:, :, ::-1]
 
                 img_src_0 = cv2.resize(img_src_0, dsize=(448, 448), interpolation=cv2.INTER_AREA)
@@ -382,7 +350,6 @@ class DACS(UDADecorator):
     @staticmethod
     def strong_transform(param, data=None, target=None):
         assert ((data is not None) or (target is not None))
-        data, target = one_mix(mask=param['mix'], data=data, target=target)
         data, target = color_jitter(
             color_jitter=param['color_jitter'],
             s=param['color_jitter_s'],

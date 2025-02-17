@@ -2,7 +2,7 @@
 dataset_type = 'OpenEarthMapDataset'
 data_root = '/home/liuwang/liuwang_data/documents/datasets/seg/OpenEarthMap_mmseg'
 crop_size = (768, 768)
-train_pipeline = [
+train_pipeline_src = [
     dict(type='LoadTifImageFromFileV2', to_float32=False),
     dict(type='LoadTifAnnotationsV2'),
     dict(
@@ -18,7 +18,30 @@ train_pipeline = [
     dict(type='RandomCrop', crop_size=crop_size, cat_max_ratio=0.75, ignore_index=255),
     dict(type='RandomFlip', prob=0.5, direction=['horizontal', 'vertical']),
     dict(type='RandomRotateRectangle', prob=0.5),
-    # dict(type='PhotoMetricDistortion'),
+    dict(type='PhotoMetricDistortion'),
+    dict(
+        type='Pad',
+        size=crop_size,
+        pad_val=dict(img=0, seg=0)
+    ),
+    dict(type='PackSegInputs')
+]
+train_pipeline_tgt = [
+    dict(type='LoadTifImageFromFileV2', to_float32=False),
+    dict(type='LoadTifAnnotationsV2'),
+    dict(
+        type='Pad',
+        size=(1024, 1024),
+        pad_val=dict(img=0, seg=0)
+    ),
+    dict(
+        type='RandomResize',
+        scale=(1024, 1024),
+        ratio_range=(0.5, 2.0),
+        keep_ratio=True),
+    dict(type='RandomCrop', crop_size=crop_size, cat_max_ratio=0.75, ignore_index=255),
+    dict(type='RandomFlip', prob=0.5, direction=['horizontal', 'vertical']),
+    dict(type='RandomRotateRectangle', prob=0.5),
     dict(
         type='Pad',
         size=crop_size,
@@ -64,7 +87,7 @@ train_dataloader = dict(
             data_root=data_root,
             data_prefix=dict(
                 img_path='images/train_val', seg_map_path='annotations/train_val'),
-            pipeline=train_pipeline
+            pipeline=train_pipeline_src
         ),
         target=dict(
             type=dataset_type,
@@ -72,7 +95,7 @@ train_dataloader = dict(
             data_prefix=dict(
                 # img_path='images/test', seg_map_path='annotations/test'),
                 img_path='images/test_with_sarseg', seg_map_path='annotations/test_with_sarseg'),
-            pipeline=train_pipeline
+            pipeline=train_pipeline_tgt
         ),
         rare_class_sampling=None
         # rare_class_sampling=dict(
