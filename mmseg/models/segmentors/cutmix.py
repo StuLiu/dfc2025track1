@@ -89,8 +89,37 @@ def gaussian_blur(blur, data=None, target=None):
     return data, target
 
 
+def cutmix(data_s, targets_s, data_t, targets_t, alpha=1.0):
+    data_s, targets_s, data_t, targets_t = (data_s.clone(), targets_s.clone().squeeze(dim=1),
+                                            data_t.clone(), targets_t.clone().squeeze(dim=1))
+    # shuffle_indices = torch.randperm(data_s.shape[0])
+    # data_t = data_t[shuffle_indices]
+    # targets_t = targets_t[shuffle_indices]
+
+    lam = np.random.beta(alpha, alpha)
+
+    image_h, image_w = data_s.shape[2:]
+    cx = np.random.uniform(0, image_w)
+    cy = np.random.uniform(0, image_h)
+    w = image_w * np.sqrt(1 - lam)
+    h = image_h * np.sqrt(1 - lam)
+    x0 = int(np.round(max(cx - w / 2, 0)))
+    x1 = int(np.round(min(cx + w / 2, image_w)))
+    y0 = int(np.round(max(cy - h / 2, 0)))
+    y1 = int(np.round(min(cy + h / 2, image_h)))
+
+    if np.random.rand() < 0.5:
+        data_t[:, :, y0:y1, x0:x1] = data_s[:, :, y0:y1, x0:x1]
+        targets_t[:, y0:y1, x0:x1] = targets_s[:, y0:y1, x0:x1]
+        return data_t, targets_t
+    else:
+        data_s[:, :, y0:y1, x0:x1] = data_t[:, :, y0:y1, x0:x1]
+        targets_s[:, y0:y1, x0:x1] = targets_t[:, y0:y1, x0:x1]
+        return data_s, targets_s
+
+
 @MODELS.register_module()
-class SSL(UDADecorator):
+class CutMix(UDADecorator):
 
     def __init__(
             self,
@@ -113,7 +142,7 @@ class SSL(UDADecorator):
             print_grad_magnitude=False,
             debug=False,
     ):
-        super(SSL, self).__init__(segmentor, data_preprocessor)
+        super(CutMix, self).__init__(segmentor, data_preprocessor)
         self.debug = debug
         self.local_iter = 0
         self.alpha = alpha
@@ -238,12 +267,17 @@ class SSL(UDADecorator):
             # pseudo_weight = self.filter_valid_pseudo_region(pseudo_weight)
             # gt_pixel_weight = torch.ones(pseudo_weight.shape).to(pseudo_weight.device)
 
+            imgs_src = data_src['inputs']
+            lbls_src = self._stack_batch_gt(data_src['data_samples'])
+            imgs_tgt, pseudo_label = cutmix(imgs_src, lbls_src, imgs_tgt_origin, pseudo_label)
+
             # apply strong augs
-            data_tgt['inputs'], pseudo_label = self.strong_transform(
+            imgs_tgt, pseudo_label = self.strong_transform(
                 strong_parameters,
-                data=data_tgt['inputs'],
+                data=imgs_tgt,
                 target=pseudo_label
             )
+            data_tgt['inputs'] = imgs_tgt
             data_tgt['data_samples'] = self._revert_batch_gt(data_tgt['data_samples'], pseudo_label)
 
             # forward and backward
@@ -260,8 +294,7 @@ class SSL(UDADecorator):
                 os.makedirs(work_dir, exist_ok=True)
 
                 img_src_0 = img_tensor2cv2(data_src['inputs'][0, :3, :, :].cpu())
-                lbl_src = self._stack_batch_gt(data_src['data_samples'])
-                lbl_src_0_vis = lbl_src[0, :, :].squeeze().cpu().numpy().astype(np.uint8)
+                lbl_src_0_vis = lbls_src[0].squeeze().cpu().numpy().astype(np.uint8)
                 lbl_src_0_vis = render_segmentation_cv2(lbl_src_0_vis, get_palettes(self.palette))[:, :, ::-1]
 
                 img_tgt_0_origin = img_tensor2cv2(imgs_tgt_origin[0, :3, :, :].cpu())
@@ -269,7 +302,7 @@ class SSL(UDADecorator):
                 pseudo_label_0_vis = render_segmentation_cv2(pseudo_label_0_vis, get_palettes(self.palette))[:, :, ::-1]
 
                 img_tgt_0 = img_tensor2cv2(data_tgt['inputs'][0, :3, :, :].cpu())
-                lbl_tgt_0_vis = pseudo_label[0, :, :].squeeze().cpu().numpy().astype(np.uint8)
+                lbl_tgt_0_vis = pseudo_label[0].squeeze().cpu().numpy().astype(np.uint8)
                 lbl_tgt_0_vis = render_segmentation_cv2(lbl_tgt_0_vis, get_palettes(self.palette))[:, :, ::-1]
 
                 img_src_0 = cv2.resize(img_src_0, dsize=(448, 448), interpolation=cv2.INTER_AREA)

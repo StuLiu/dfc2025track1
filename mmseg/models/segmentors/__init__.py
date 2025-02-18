@@ -7,12 +7,12 @@ from .encoder_decoder_prototype_learning import EncoderDecoderPrototypeLearning
 from .multimodal_encoder_decoder import MultimodalEncoderDecoder
 from .seg_tta import SegTTAModel
 from .dacs import DACS
-from .ssl import SSL
+from .cutmix import CutMix
 
 
 __all__ = [
     'BaseSegmentor', 'EncoderDecoder', 'CascadeEncoderDecoder', 'SegTTAModel',
     'MultimodalEncoderDecoder', 'DepthEstimator',
     # ###########################
-    'EncoderDecoderPrototypeLearning', 'DACS', 'SSL'
+    'EncoderDecoderPrototypeLearning', 'DACS', 'CutMix'
 ]

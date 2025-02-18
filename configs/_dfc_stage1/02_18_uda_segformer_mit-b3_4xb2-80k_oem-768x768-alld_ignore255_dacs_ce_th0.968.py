@@ -4,14 +4,14 @@
 # ---------------------------------------------------------------
 
 _base_ = [
-    './02_17_uda_segformer_mit-b3_4xb2-40k_oem-768x768-alld_ignore255_ssl_ce.py',
+    './02_17_uda_segformer_mit-b3_4xb2-40k_oem-768x768-alld_ignore255_ce.py',
 ]
 
 model=dict(
-    pseudo_threshold=0.9,
+    pseudo_threshold=0.968,
     segmentor=dict(
         train_cfg=dict(
-            work_dir='work_dirs/02_18_uda_segformer_mit-b3_4xb2-80k_oem-768x768-alld_ignore255_ssl_ce_th0.9'
+            work_dir='work_dirs/02_18_uda_segformer_mit-b3_4xb2-80k_oem-768x768-alld_ignore255_dacs_ce_th0.968'
         )
     )
 )

@@ -19,7 +19,7 @@ data_preprocessor = dict(
 # noqa
 checkpoint = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/segformer/mit_b0_20220624-7e0fe6dd.pth'
 model = dict(
-    type='SSL',
+    type='CutMix',
     segmentor=dict(
         type='EncoderDecoder',
         backbone=dict(

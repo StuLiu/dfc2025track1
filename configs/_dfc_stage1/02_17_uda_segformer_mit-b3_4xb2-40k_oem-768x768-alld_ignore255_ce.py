@@ -7,7 +7,7 @@ _base_ = [
     # DACS Self-Training with SegFormer Network Architecture
     '../_base_/uda/uda_segformer_mit-b0_dacs.py',
     # GTA->Cityscapes Data Loading
-    '../_base_/datasets/uda_oem2oem_768x768.py',
+    '../_base_/datasets/uda_oem2oem_768x768_strong-augs-src.py',
     # Linear Learning Rate Warmup with Subsequent Linear Decay
     '../_base_/schedules/schedule_40k.py',
     '../_base_/default_runtime.py',
