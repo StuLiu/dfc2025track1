@@ -53,11 +53,7 @@ class UDADecorator(BaseSegmentor):
         super(BaseSegmentor, self).__init__(data_preprocessor=data_preprocessor)
         segmentor_cfg['data_preprocessor'] = data_preprocessor
         self.model_stu = build_segmentor(deepcopy(segmentor_cfg))
-
-        self.model_tea = deepcopy(self.model_stu)
-        for param in self.model_tea.parameters():
-            param.detach_()
-        self.model_tea = self.model_tea.eval()
+        self.model_tea = build_segmentor(deepcopy(segmentor_cfg))
 
         self.train_cfg = segmentor_cfg['train_cfg']
         self.test_cfg = segmentor_cfg['test_cfg']
@@ -91,9 +87,40 @@ class UDADecorator(BaseSegmentor):
         map of the same size as input."""
         return self.get_teacher().encode_decode(inputs, batch_img_metas)
 
+    def check_students_params(self):
+        for param in self.get_student().parameters():
+            tensor_temp = param.data.clone()
+            dist.all_reduce(tensor_temp, op=dist.ReduceOp.MAX)
+            assert torch.allclose(param.data, tensor_temp), 'studnets params are not consistent!'
+
+    def check_teachers_params(self):
+        for param in self.get_student().parameters():
+            tensor_temp = param.data.clone()
+            dist.all_reduce(tensor_temp, op=dist.ReduceOp.MAX)
+            assert torch.allclose(param.data, tensor_temp), 'teachers params are not consistent!'
+
     def sync_ema_weights(self):
+        if not dist.is_initialized():
+            return
         ema_model = self.get_teacher()
         for param in ema_model.parameters():
+            dist.all_reduce(param.data, op=dist.ReduceOp.SUM)
+            param.data /= dist.get_world_size()
+
+    def sync_student_gradients(self):
+        if not dist.is_initialized():
+            return
+        for param in self.get_student().parameters():
+            if param.grad is not None:
+                # 对每个参数的梯度进行 all_reduce 操作
+                dist.all_reduce(param.grad.data, op=dist.ReduceOp.SUM)
+                # （可选）平均化梯度：对于分布式训练，可以除以 world_size
+                param.grad.data /= dist.get_world_size()
+
+    def sync_student_weights(self):
+        if not dist.is_initialized():
+            return
+        for param in self.get_student().parameters():
             dist.all_reduce(param.data, op=dist.ReduceOp.SUM)
             param.data /= dist.get_world_size()
 
@@ -101,18 +128,18 @@ class UDADecorator(BaseSegmentor):
         alpha = min(1 - 1 / (curr_iter + 1), self.alpha)
         for ema_param, param in zip(self.get_teacher().parameters(),
                                     self.get_student().parameters()):
-            if not param.data.shape:  # scalar tensor
-                ema_param.data = ema(ema_param.data, param.data, alpha)
-            else:
-                ema_param.data[:] = ema(ema_param[:].data[:],
-                                        param[:].data[:], alpha)
+            ema_param.data = ema(ema_param.data, param.data, alpha)
 
-    def print_teacher_params(self):
+    def print_params(self):
         for name, param in self.get_teacher().named_parameters():
             if 'conv' in name:
-                print_log(f'{name}: {param[0,0,:]}', None)
+                print_log(f'{name}: {param[0,0,:]}-tea', None)
                 break
-
+        for name, param in self.get_student().named_parameters():
+            if 'conv' in name:
+                print_log(f'{name}: {param[0,0,:]}-stu', None)
+                break
+                
     def _decode_head_forward_train(self, inputs: List[Tensor],
                                    data_samples: SampleList) -> dict:
         """Run forward function and calculate loss for decode head in

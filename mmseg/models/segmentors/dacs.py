@@ -191,18 +191,14 @@ class DACS(UDADecorator):
         Returns:
             Dict[str, torch.Tensor]: A ``dict`` of tensor for logging.
         """
-        # init ema teacher
-        if self.iter == 0 and dist.is_available() and dist.get_world_size() > 1:
-            self.sync_ema_weights()
 
-        self.iter += 1
-        # update teacher params
-        self.update_ema_weights(self.iter)
-        self.get_teacher().eval()
+        # >>>>>>>>>>>>>>>>>>>> dacs training pipline begin. >>>>>>>>>>>>>>>>>>>>>
+        # forward(data_src)  -> loss.backword & sync_gadients -> optimizer.step.
+        # generate pseudo-labels and weights -> DACS (classmix)
+        # forward(data_dacs) -> loss.backword & sync_gadients -> optimizer.step
+        # return loss logs.
 
         log_vars = {}
-
-        # forward -> loss.backword -> optimizer.step -> return loss logs.
         with optim_wrapper.optim_context(self):
             # preprocess batch data
             data_copy = deepcopy(data)
@@ -221,10 +217,17 @@ class DACS(UDADecorator):
             # train on source domain #
             # ###################### #
             losses_src = self._run_forward(data_src, mode='loss')
+
             losses_parsed_src, log_vars_src = self.parse_losses(losses_src)
-            # parsed_losses += losses_parsed_src
+            for loss_name, loss_val in log_vars_src.items():
+                log_vars[f'{loss_name}_src'] = loss_val
             log_vars.update(log_vars_src)
-            optim_wrapper.update_params(losses_parsed_src)
+
+            # loss.backward => sync gradients => optim.step and zero_grad
+            optim_wrapper.backward(losses_parsed_src)
+            self.sync_student_gradients()
+            optim_wrapper.step()
+            optim_wrapper.zero_grad()
 
             # ###################### #
             # train on target domain #
@@ -245,7 +248,7 @@ class DACS(UDADecorator):
             # get pseudo labels
             imgs_tgt_origin = data_tgt['inputs'].clone()
             with torch.no_grad():
-                seg_logits = self.get_teacher().predict_logits(data_tgt['inputs'], data_tgt['data_samples']).detach()
+                seg_logits = self.get_teacher().predict_logits(imgs_tgt_origin, data_tgt['data_samples']).detach()
             pseudo_label, pseudo_weight = self.get_pseudo_label_and_weight(seg_logits)
             # pseudo_weight = self.filter_valid_pseudo_region(pseudo_weight)
             gt_pixel_weight = torch.ones(pseudo_weight.shape).to(pseudo_weight.device)
@@ -273,20 +276,35 @@ class DACS(UDADecorator):
             data_tgt['data_samples'] = self._revert_batch_gt(data_tgt['data_samples'], mixed_lbl)
 
             losses_tgt = self._run_forward(data_tgt, mode='loss')
+            for loss_name in losses_tgt.keys():
+                if 'loss_ce' in loss_name:
+                    losses_tgt[loss_name] = losses_tgt[loss_name] * mixed_seg_weight
+                if 'loss_lovasz' in loss_name or 'loss_dice' in loss_name:
+                    losses_tgt[loss_name] = losses_tgt[loss_name] * mixed_seg_weight.min(dim=1)[0].min(dim=1)[0]
             losses_parsed_tgt, log_vars_tgt = self.parse_losses(losses_tgt)
-            optim_wrapper.update_params(losses_parsed_tgt)
+            for loss_name, loss_val in log_vars_tgt.items():
+                log_vars[f'{loss_name}_tgt'] = loss_val
             log_vars.update(log_vars_tgt)
-            # losses =
-            # # merge source and target data
-            # data_merged = {
-            #     'inputs': torch.cat([data_src['inputs'], data_tgt['inputs']], dim=0),
-            #     'data_samples': data_src['data_samples'] + data_tgt['data_samples']
-            # }
-            # losses = self._run_forward(data_merged, mode='loss')  # type: ignore
+
+            # loss.backward => sync gradients => optim.step and zero_grad
+            optim_wrapper.backward(losses_parsed_tgt)
+            self.sync_student_gradients()
+            optim_wrapper.step()
+            optim_wrapper.zero_grad()
+
+        # update teacher params
+        self.update_ema_weights(self.iter)
+        self.iter += 1
 
         if self.debug and (self.iter == 1 or self.iter % self.debug_img_interval == 0):
-            self.print_teacher_params()
-            if not dist.is_available() or (dist.is_available() and dist.get_rank() == 0):
+            self.print_params()
+            self.check_students_params()
+            self.check_teachers_params()
+            print_log(f'dist.is_initialized()={dist.is_initialized()}', 'current')
+            print_log(f'mixed_seg_weight[0].unique()={torch.unique(mixed_seg_weight[0])}', 'current')
+            print_log(f'{(seg_logits.softmax(dim=1)[0] >= self.pseudo_threshold).sum() / mixed_seg_weight[0].numel()}',
+                      'current')
+            if not dist.is_initialized() or (dist.get_rank() == 0):
                 work_dir = os.path.join(self.train_cfg.get('work_dir', 'debugs'), 'debug')
                 os.makedirs(work_dir, exist_ok=True)
 
@@ -304,15 +322,22 @@ class DACS(UDADecorator):
                 lbl_tgt_0_vis = lbl_tgt[0, :, :].squeeze().cpu().numpy().astype(np.uint8)
                 lbl_tgt_0_vis = render_segmentation_cv2(lbl_tgt_0_vis, get_palettes(self.palette))[:, :, ::-1]
 
+                mix_masks_0 = (mix_masks[0].squeeze().cpu().numpy() * 255).astype(np.uint8)
+                mix_masks_0 = np.stack([mix_masks_0] * 3, axis=-1)
+                mixed_seg_weight_0 = (mixed_seg_weight[0].squeeze().cpu().numpy() * 255).astype(np.uint8)
+                mixed_seg_weight_0 = np.stack([mixed_seg_weight_0] * 3, axis=-1)
+
                 img_src_0 = cv2.resize(img_src_0, dsize=(448, 448), interpolation=cv2.INTER_AREA)
                 img_tgt_0_origin = cv2.resize(img_tgt_0_origin, dsize=(448, 448), interpolation=cv2.INTER_AREA)
                 img_tgt_0 = cv2.resize(img_tgt_0, dsize=(448, 448), interpolation=cv2.INTER_AREA)
                 lbl_src_0_vis = cv2.resize(lbl_src_0_vis, dsize=(448, 448), interpolation=cv2.INTER_NEAREST)
                 lbl_tgt_0_vis = cv2.resize(lbl_tgt_0_vis, dsize=(448, 448), interpolation=cv2.INTER_NEAREST)
                 pseudo_label_0_vis = cv2.resize(pseudo_label_0_vis, dsize=(448, 448), interpolation=cv2.INTER_NEAREST)
-
-                imgs = np.concatenate([img_src_0, img_tgt_0_origin, img_tgt_0], axis=1)
-                lbls = np.concatenate([lbl_src_0_vis, pseudo_label_0_vis, lbl_tgt_0_vis], axis=1)
+                mix_masks_0 = cv2.resize(mix_masks_0, dsize=(448, 448), interpolation=cv2.INTER_NEAREST)
+                mixed_seg_weight_0 = cv2.resize(mixed_seg_weight_0, dsize=(448, 448), interpolation=cv2.INTER_NEAREST)
+                imgs = np.concatenate([img_src_0, img_tgt_0_origin, img_tgt_0, mix_masks_0], axis=1)
+                lbls = np.concatenate([lbl_src_0_vis, pseudo_label_0_vis, lbl_tgt_0_vis, mixed_seg_weight_0],
+                                      axis=1)
                 vis = np.concatenate([imgs, lbls], axis=0)
                 cv2.imwrite(os.path.join(work_dir, f'vis_{self.iter:06d}.png'), vis)
                 # cv2.imshow("vis", vis)
@@ -325,12 +350,9 @@ class DACS(UDADecorator):
     def get_pseudo_label_and_weight(self, logits):
         ema_softmax = torch.softmax(logits.detach(), dim=1)
         pseudo_prob, pseudo_label = torch.max(ema_softmax, dim=1)
-        pseudo_label[pseudo_prob < self.pseudo_threshold] = self.ignore_index
-        ps_large_p = pseudo_prob.ge(self.pseudo_threshold).long() == 1
-        ps_size = np.size(np.array(pseudo_label.cpu()))
-        pseudo_weight = torch.sum(ps_large_p).item() / ps_size
-        pseudo_weight = pseudo_weight * torch.ones(
-            pseudo_prob.shape, device=logits.device)
+        valid_num = torch.sum(pseudo_prob >= self.pseudo_threshold, dim=[1, 2], keepdim=True)   # (n, 1, 1)
+        pseudo_weight = valid_num / pseudo_label[0].numel()             # (n, 1, 1)
+        pseudo_weight = pseudo_weight * torch.ones_like(pseudo_prob)    # (n, h, w)
         return pseudo_label, pseudo_weight
 
     def filter_valid_pseudo_region(self, pseudo_weight, valid_pseudo_mask=None):

@@ -5,11 +5,11 @@
 
 _base_ = [
     # DACS Self-Training with SegFormer Network Architecture
-    '../_base_/uda/uda_segformer_mit-b0_cutmix.py',
+    '../_base_/uda/uda_segformer_mit-b0_dacs.py',
     # GTA->Cityscapes Data Loading
     '../_base_/datasets/uda_oem2oem_768x768_strong-augs-src.py',
     # Linear Learning Rate Warmup with Subsequent Linear Decay
-    '../_base_/schedules/schedule_40k.py',
+    '../_base_/schedules/schedule_80k.py',
     '../_base_/default_runtime.py',
 ]
 crop_size = (768, 768)
@@ -21,6 +21,7 @@ data_preprocessor = dict(
 checkpoint = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/segformer/mit_b3_20220624-13b1141c.pth'  # noqa
 model = dict(
     debug_img_interval=500,
+    pseudo_threshold=0.968,
     debug=True,
     segmentor=dict(
         backbone=dict(
@@ -33,11 +34,13 @@ model = dict(
             in_channels=[64, 128, 320, 512],
             num_classes=9,
             loss_decode=[
-                dict(type='CrossEntropyLoss', loss_name='loss_ce', loss_weight=1.0, ignore_index=255),
+                dict(type='CrossEntropyLoss', loss_name='loss_ce', loss_weight=1.0, ignore_index=255, reduction='none'),
                 # dict(type='LovaszLoss', loss_name='loss_lovasz', per_image=True, loss_weight=1.0)
             ]
         ),
-        train_cfg=dict(work_dir='work_dirs/02_17_uda_segformer_mit-b3_4xb2-40k_oem-768x768-alld_ignore255_ssl_ce'),
+        train_cfg=dict(
+            work_dir='work_dirs/02_20_uda_segformer_mit-b3_4xb2-80k_oem-768x768-alld_ignore255_dacs_ce_th0.968'
+        ),
         test_cfg=dict(mode='slide', crop_size=crop_size, stride=stride)
     )
 )
@@ -61,7 +64,7 @@ param_scheduler = [
         eta_min=0.0,
         power=1.0,
         begin=1500,
-        end=40000,
+        end=80000,
         by_epoch=False,
     )
 ]
@@ -70,7 +73,7 @@ train_dataloader = dict(batch_size=2, num_workers=8)
 val_dataloader = dict(batch_size=1, num_workers=4)
 test_dataloader = dict(batch_size=1, num_workers=4)
 
-train_cfg = dict(type='IterBasedTrainLoop', max_iters=40000, val_interval=4000)
+train_cfg = dict(type='IterBasedTrainLoop', max_iters=80000, val_interval=8000)
 default_hooks = dict(
-    checkpoint=dict(by_epoch=False, interval=4000, max_keep_ckpts=3,
+    checkpoint=dict(by_epoch=False, interval=8000, max_keep_ckpts=2,
                     save_last=True, save_best=['mIoU'], type='CheckpointHook'))

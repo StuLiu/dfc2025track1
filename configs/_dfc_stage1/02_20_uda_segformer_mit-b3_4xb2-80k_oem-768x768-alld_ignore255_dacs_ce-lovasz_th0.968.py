@@ -5,7 +5,7 @@
 
 _base_ = [
     # DACS Self-Training with SegFormer Network Architecture
-    '../_base_/uda/uda_segformer_mit-b0_cutmix.py',
+    '../_base_/uda/uda_segformer_mit-b0_dacs.py',
     # GTA->Cityscapes Data Loading
     '../_base_/datasets/uda_oem2oem_768x768_strong-augs-src.py',
     # Linear Learning Rate Warmup with Subsequent Linear Decay
@@ -35,11 +35,12 @@ model = dict(
             num_classes=9,
             loss_decode=[
                 dict(type='CrossEntropyLoss', loss_name='loss_ce', loss_weight=1.0, ignore_index=255, reduction='none'),
-                # dict(type='LovaszLoss', loss_name='loss_lovasz', per_image=True, loss_weight=1.0)
+                dict(type='LovaszLoss', loss_name='loss_lovasz', per_image=True, loss_weight=1.0, reduction='none')
             ]
         ),
         train_cfg=dict(
-            work_dir='work_dirs/02_18_uda_segformer_mit-b3_4xb2-80k_oem-768x768-alld_ignore255_cutmix_ce_th0.968'),
+            work_dir='work_dirs/02_20_uda_segformer_mit-b3_4xb2-80k_oem-768x768-alld_ignore255_dacs_ce-lovasz_th0.968'
+        ),
         test_cfg=dict(mode='slide', crop_size=crop_size, stride=stride)
     )
 )
@@ -68,7 +69,7 @@ param_scheduler = [
     )
 ]
 
-train_dataloader = dict(batch_size=4, num_workers=8)
+train_dataloader = dict(batch_size=2, num_workers=8)
 val_dataloader = dict(batch_size=1, num_workers=4)
 test_dataloader = dict(batch_size=1, num_workers=4)
 
