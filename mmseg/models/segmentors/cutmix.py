@@ -108,14 +108,18 @@ def cutmix(data_s, targets_s, data_t, targets_t, alpha=1.0):
     y0 = int(np.round(max(cy - h / 2, 0)))
     y1 = int(np.round(min(cy + h / 2, image_h)))
 
+    mask = torch.zeros_like(targets_s)
     if np.random.rand() < 0.5:
         data_t[:, :, y0:y1, x0:x1] = data_s[:, :, y0:y1, x0:x1]
         targets_t[:, y0:y1, x0:x1] = targets_s[:, y0:y1, x0:x1]
-        return data_t, targets_t
+        mask[:, y0:y1, x0:x1] = 1
+        return data_t, targets_t, mask
     else:
         data_s[:, :, y0:y1, x0:x1] = data_t[:, :, y0:y1, x0:x1]
         targets_s[:, y0:y1, x0:x1] = targets_t[:, y0:y1, x0:x1]
-        return data_s, targets_s
+        mask[:, y0:y1, x0:x1] = 1
+        mask = 1 - mask
+        return data_s, targets_s, mask
 
 
 @MODELS.register_module()
@@ -206,8 +210,10 @@ class CutMix(UDADecorator):
         Returns:
             Dict[str, torch.Tensor]: A ``dict`` of tensor for logging.
         """
-        # init ema teacher
-        if self.iter == 0 and dist.is_available() and dist.get_world_size() > 1:
+        # sync ema teacher
+        if (self.iter % 50 == 0):
+            if dist.is_initialized():
+                dist.barrier()
             self.sync_ema_weights()
 
         self.iter += 1
@@ -240,6 +246,7 @@ class CutMix(UDADecorator):
             for loss_name, loss_val in log_vars_src.items():
                 log_vars[f'{loss_name}_src'] = loss_val
             optim_wrapper.update_params(losses_parsed_src)
+            log_vars.update(log_vars_src)
 
             # ###################### #
             # train on target domain #
@@ -265,11 +272,11 @@ class CutMix(UDADecorator):
             seg_map_teacher = seg_logits.argmax(dim=1)
             pseudo_label, pseudo_weight = self.get_pseudo_label_and_weight(seg_logits)
             # pseudo_weight = self.filter_valid_pseudo_region(pseudo_weight)
-            # gt_pixel_weight = torch.ones(pseudo_weight.shape).to(pseudo_weight.device)
 
             imgs_src = data_src['inputs']
             lbls_src = self._stack_batch_gt(data_src['data_samples'])
-            imgs_tgt, pseudo_label = cutmix(imgs_src, lbls_src, imgs_tgt_origin, pseudo_label)
+            imgs_tgt, pseudo_label, mix_masks = cutmix(imgs_src, lbls_src, imgs_tgt_origin, pseudo_label)
+            pseudo_weight[mix_masks == 1] = 1
 
             # apply strong augs
             imgs_tgt, pseudo_label = self.strong_transform(
@@ -282,14 +289,24 @@ class CutMix(UDADecorator):
 
             # forward and backward
             losses_tgt = self._run_forward(data_tgt, mode='loss')
+            for loss_name in losses_tgt.keys():
+                if 'loss_ce' in loss_name:
+                    losses_tgt[loss_name] = losses_tgt[loss_name] * pseudo_weight
+                if 'loss_lovasz' in loss_name or 'loss_dice' in loss_name:
+                    losses_tgt[loss_name] = losses_tgt[loss_name] * pseudo_weight.min(dim=1)[0].min(dim=1)[0]
             losses_parsed_tgt, log_vars_tgt = self.parse_losses(losses_tgt)
             for loss_name, loss_val in log_vars_tgt.items():
                 log_vars[f'{loss_name}_tgt'] = loss_val
             optim_wrapper.update_params(losses_parsed_tgt)
+            log_vars.update(log_vars_tgt)
 
         if self.debug and (self.iter == 1 or self.iter % self.debug_img_interval == 0):
             self.print_teacher_params()
-            if not dist.is_available() or (dist.is_available() and dist.get_rank() == 0):
+            print_log(f'dist.is_initialized()={dist.is_initialized()}', 'current')
+            print_log(f'pseudo_weight[0].unique()={torch.unique(pseudo_weight[0])}', 'current')
+            print_log(f'{(seg_logits.softmax(dim=1)[0] >= self.pseudo_threshold).sum() / pseudo_weight[0].numel()}',
+                      'current')
+            if not dist.is_initialized() or dist.get_rank() == 0:
                 work_dir = os.path.join(self.train_cfg.get('work_dir', 'debugs'), 'debug')
                 os.makedirs(work_dir, exist_ok=True)
 
@@ -305,15 +322,23 @@ class CutMix(UDADecorator):
                 lbl_tgt_0_vis = pseudo_label[0].squeeze().cpu().numpy().astype(np.uint8)
                 lbl_tgt_0_vis = render_segmentation_cv2(lbl_tgt_0_vis, get_palettes(self.palette))[:, :, ::-1]
 
+                mix_masks_0 = (mix_masks[0].squeeze().cpu().numpy() * 255).astype(np.uint8)
+                mix_masks_0 = np.stack([mix_masks_0] * 3, axis=-1)
+                mixed_seg_weight_0 = (pseudo_weight[0].squeeze().cpu().numpy() * 255).astype(np.uint8)
+                mixed_seg_weight_0 = np.stack([mixed_seg_weight_0] * 3, axis=-1)
+
                 img_src_0 = cv2.resize(img_src_0, dsize=(448, 448), interpolation=cv2.INTER_AREA)
                 img_tgt_0_origin = cv2.resize(img_tgt_0_origin, dsize=(448, 448), interpolation=cv2.INTER_AREA)
                 img_tgt_0 = cv2.resize(img_tgt_0, dsize=(448, 448), interpolation=cv2.INTER_AREA)
                 lbl_src_0_vis = cv2.resize(lbl_src_0_vis, dsize=(448, 448), interpolation=cv2.INTER_NEAREST)
                 lbl_tgt_0_vis = cv2.resize(lbl_tgt_0_vis, dsize=(448, 448), interpolation=cv2.INTER_NEAREST)
                 pseudo_label_0_vis = cv2.resize(pseudo_label_0_vis, dsize=(448, 448), interpolation=cv2.INTER_NEAREST)
+                mix_masks_0 = cv2.resize(mix_masks_0, dsize=(448, 448), interpolation=cv2.INTER_NEAREST)
+                mixed_seg_weight_0 = cv2.resize(mixed_seg_weight_0, dsize=(448, 448), interpolation=cv2.INTER_NEAREST)
 
-                imgs = np.concatenate([img_src_0, img_tgt_0_origin, img_tgt_0], axis=1)
-                lbls = np.concatenate([lbl_src_0_vis, pseudo_label_0_vis, lbl_tgt_0_vis], axis=1)
+                imgs = np.concatenate([img_src_0, img_tgt_0_origin, img_tgt_0, mix_masks_0], axis=1)
+                lbls = np.concatenate([lbl_src_0_vis, pseudo_label_0_vis, lbl_tgt_0_vis, mixed_seg_weight_0],
+                                      axis=1)
                 vis = np.concatenate([imgs, lbls], axis=0)
                 cv2.imwrite(os.path.join(work_dir, f'vis_{self.iter:06d}.png'), vis)
                 # cv2.imshow("vis", vis)
@@ -326,12 +351,9 @@ class CutMix(UDADecorator):
     def get_pseudo_label_and_weight(self, logits):
         ema_softmax = torch.softmax(logits.detach(), dim=1)
         pseudo_prob, pseudo_label = torch.max(ema_softmax, dim=1)
-        pseudo_label[pseudo_prob < self.pseudo_threshold] = self.ignore_index
-        ps_large_p = pseudo_prob.ge(self.pseudo_threshold).long() == 1
-        ps_size = np.size(np.array(pseudo_label.cpu()))
-        pseudo_weight = torch.sum(ps_large_p).item() / ps_size
-        pseudo_weight = pseudo_weight * torch.ones(
-            pseudo_prob.shape, device=logits.device)
+        valid_num = torch.sum(pseudo_prob >= self.pseudo_threshold, dim=[1, 2], keepdim=True)   # (n, 1, 1)
+        pseudo_weight = valid_num / pseudo_label[0].numel()             # (n, 1, 1)
+        pseudo_weight = pseudo_weight * torch.ones_like(pseudo_prob)    # (n, h, w)
         return pseudo_label, pseudo_weight
 
     def filter_valid_pseudo_region(self, pseudo_weight, valid_pseudo_mask=None):
