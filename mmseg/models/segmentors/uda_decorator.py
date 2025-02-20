@@ -52,8 +52,12 @@ class UDADecorator(BaseSegmentor):
     def __init__(self, segmentor_cfg, data_preprocessor):
         super(BaseSegmentor, self).__init__(data_preprocessor=data_preprocessor)
         segmentor_cfg['data_preprocessor'] = data_preprocessor
-        self.model_stu = build_segmentor(deepcopy(segmentor_cfg))
-        self.model_tea = build_segmentor(deepcopy(segmentor_cfg))
+
+        self.model_stu = MODELS.build(deepcopy(segmentor_cfg))
+
+        self.model_tea = MODELS.build(deepcopy(segmentor_cfg))
+        for name, param in self.model_tea.named_parameters():
+            param.requires_grad = False
 
         self.train_cfg = segmentor_cfg['train_cfg']
         self.test_cfg = segmentor_cfg['test_cfg']
