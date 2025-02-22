@@ -50,13 +50,13 @@ param_scheduler = [
     )
 ]
 
-find_unused_parameters = True
+find_unused_parameters = False
 
 train_dataloader = dict(batch_size=2, num_workers=4)
 val_dataloader = dict(batch_size=1, num_workers=4)
 test_dataloader = dict(batch_size=1, num_workers=4)
 
-train_cfg = dict(type='IterBasedTrainLoop', max_iters=40000, val_interval=50)
+train_cfg = dict(type='IterBasedTrainLoop', max_iters=40000, val_interval=10000)
 default_hooks = dict(
     checkpoint=dict(by_epoch=False, interval=10000, max_keep_ckpts=2,
                     save_last=True, save_best=['mIoU'], type='CheckpointHook'))
