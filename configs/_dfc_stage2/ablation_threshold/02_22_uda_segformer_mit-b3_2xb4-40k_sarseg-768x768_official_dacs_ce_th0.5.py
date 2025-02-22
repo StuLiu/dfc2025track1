@@ -5,12 +5,12 @@
 
 _base_ = [
     # DACS Self-Training with SegFormer Network Architecture
-    '../_base_/uda/uda_segformer_mit-b0_dacs.py',
+    '../../_base_/uda/uda_segformer_mit-b0_dacs.py',
     # GTA->Cityscapes Data Loading
-    '../_base_/datasets/uda_dfc2025sarseg.py',
+    '../../_base_/datasets/uda_dfc2025sarseg.py',
     # Linear Learning Rate Warmup with Subsequent Linear Decay
-    '../_base_/schedules/schedule_40k.py',
-    '../_base_/default_runtime.py',
+    '../../_base_/schedules/schedule_40k.py',
+    '../../_base_/default_runtime.py',
 ]
 crop_size = (768, 768)
 stride = (384, 384)
