@@ -79,7 +79,8 @@ class EncoderDecoder(BaseSegmentor):
                  test_cfg: OptConfigType = None,
                  data_preprocessor: OptConfigType = None,
                  pretrained: Optional[str] = None,
-                 init_cfg: OptMultiConfig = None):
+                 init_cfg: OptMultiConfig = None,
+                 progressive: str = None):
         super().__init__(
             data_preprocessor=data_preprocessor, init_cfg=init_cfg)
         if pretrained is not None:
@@ -96,6 +97,14 @@ class EncoderDecoder(BaseSegmentor):
         self.test_cfg = test_cfg
 
         assert self.with_decode_head
+
+        # load pretrained networks (include backbone, neck, and decode heads) parameters.
+        if progressive:
+            state_dict = torch.load(f'{progressive}')
+            state_dict = state_dict.get('state_dict', state_dict)
+            state_dict = state_dict.get('module', state_dict)
+            print_log(f'load pretrained model state-dict from {progressive}', 'current')
+            self.load_state_dict(state_dict, strict=True)
 
     def _init_decode_head(self, decode_head: ConfigType) -> None:
         """Initialize ``decode_head``"""

@@ -65,6 +65,15 @@ class UDADecorator(BaseSegmentor):
         self.out_channels = segmentor_cfg['decode_head']['num_classes']
         self.iter = 0
 
+        # load pretrained networks (include backbone, neck, and decode heads) parameters.
+        progressive = segmentor_cfg.get('progressive', '')
+        if progressive:
+            state_dict = torch.load(f'{progressive}')
+            state_dict = state_dict.get('state_dict', state_dict)
+            state_dict = state_dict.get('module', state_dict)
+            print_log(f'load pretrained model state-dict from {progressive}', 'current')
+            self.load_state_dict(state_dict)
+
     def get_student(self):
         return get_module(self.model_stu)
 
