@@ -13,10 +13,9 @@ data_preprocessor = dict(
 # checkpoint = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/segformer/mit_b5_20220624-658746d9.pth'  # noqa
 model = dict(
     data_preprocessor=data_preprocessor,
+    progressive='/home/liuwang/liuwang_data/documents/projects/mmseg-agri/work_dirs/'
+                '02_17_segformer_mit-b5_4xb2-160k_sarseg-768x768_interv1_ignore255_sce-lovasz/iter_160000.pth',
     backbone=dict(
-        progressive='/home/liuwang/liuwang_data/documents/projects/mmseg-agri/work_dirs/'
-                    '02_17_segformer_mit-b5_4xb2-160k_sarseg-768x768_interv1_ignore255_sce-lovasz/'
-                    'iter_160000.pth',
         embed_dims=64,
         num_heads=[1, 2, 5, 8],
         num_layers=[3, 6, 40, 3]
@@ -66,7 +65,7 @@ param_scheduler = [
 
 train_dataloader = dict(
     batch_size=2,
-    num_workers=8,
+    num_workers=4,
     dataset=dict(
         data_prefix=dict(
             seg_map_path='train/labels_pl/labels_intersection_ignore255'
