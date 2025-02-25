@@ -23,6 +23,7 @@ model = dict(
     decode_head=dict(
         in_channels=[64, 128, 320, 512],
         num_classes=9,
+        ignore_index=255,
         loss_decode=[
             dict(type='SymmetricCELoss', loss_name='loss_sce', loss_weight=1.0, ignore_index=255),
             dict(
