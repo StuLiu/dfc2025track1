@@ -20,7 +20,10 @@ from .transforms import (CLAHE, AdjustGamma, Albu, BioMedical3DPad,
                          ResizeShortestEdge, ResizeToMultiple, RGB2Gray,
                          SegRescale,
                          # custom
-                         PhotoMetricDistortionTif, RandomRotate90,
+                         RandomDownUp,
+                         PhotoMetricDistortionV2,
+                         PhotoMetricDistortionTif,
+                         RandomRotate90,
                          PhotoMetricDistortionTifWhispers)
 
 
@@ -37,8 +40,15 @@ __all__ = [
     'LoadMultipleRSImageFromFile', 'LoadDepthAnnotation', 'RandomDepthMix',
     'RandomFlip', 'Resize',
     # custom
-    "LoadTifImageFromFile", 'LoadTifImageFromFileV2', 'LoadTifImageFromFileV3',
-    'PhotoMetricDistortionTif', 'RandomRotate90', 'MultiLabelPackSegInputs',
-    'LoadTifAnnotations', 'LoadTifAnnotationsV2',
+    "LoadTifImageFromFile",
+    'LoadTifImageFromFileV2',
+    'LoadTifImageFromFileV3',
+    'PhotoMetricDistortionV2',
+    'PhotoMetricDistortionTif',
     'PhotoMetricDistortionTifWhispers',
+    'RandomRotate90',
+    'LoadTifAnnotations',
+    'LoadTifAnnotationsV2',
+    'MultiLabelPackSegInputs',
+    'RandomDownUp',
 ]

@@ -101,12 +101,16 @@ class UDADecorator(BaseSegmentor):
         return self.get_teacher().encode_decode(inputs, batch_img_metas)
 
     def check_students_params(self):
+        if not dist.is_initialized():
+            return
         for param in self.get_student().parameters():
             tensor_temp = param.data.clone()
             dist.all_reduce(tensor_temp, op=dist.ReduceOp.MAX)
             assert torch.allclose(param.data, tensor_temp), 'studnets params are not consistent!'
 
     def check_teachers_params(self):
+        if not dist.is_initialized():
+            return
         for param in self.get_student().parameters():
             tensor_temp = param.data.clone()
             dist.all_reduce(tensor_temp, op=dist.ReduceOp.MAX)

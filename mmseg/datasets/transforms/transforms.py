@@ -9,6 +9,7 @@ import mmcv
 import mmengine
 import numpy as np
 from mmcv.transforms import RandomFlip as MMCV_RandomFlip
+from mmcv.transforms import RandomResize as MMCV_RandomResize
 from mmcv.transforms import Resize as MMCV_Resize
 from mmcv.transforms.base import BaseTransform
 from mmcv.transforms.utils import cache_randomness
@@ -565,38 +566,76 @@ class RandomRotateRectangle(RandomRotate):
         Returns:
             dict: Rotated results.
         """
-
-        rotate, _ = self.generate_degree()
         angle = np.random.choice(self.degree_2)
-        if rotate:
-            # rotate image
-            results['img'] = mmcv.imrotate(
-                results['img'],
-                angle=angle,
-                border_value=self.pal_val,
-                center=self.center,
-                auto_bound=self.auto_bound)
+        # rotate image
+        results['img'] = mmcv.imrotate(
+            results['img'],
+            angle=angle,
+            border_value=self.pal_val,
+            center=self.center,
+            auto_bound=self.auto_bound)
 
-            # rotate segs
-            for key in results.get('seg_fields', []):
-                results[key] = mmcv.imrotate(
-                    results[key],
-                    angle=angle,
-                    border_value=self.seg_pad_val,
-                    center=self.center,
-                    auto_bound=self.auto_bound,
-                    interpolation='nearest')
+        # rotate segs
+        for key in results.get('seg_fields', []):
+            results[key] = mmcv.imrotate(
+                results[key],
+                angle=angle,
+                border_value=self.seg_pad_val,
+                center=self.center,
+                auto_bound=self.auto_bound,
+                interpolation='nearest')
         return results
 
     def __repr__(self):
         repr_str = self.__class__.__name__
         repr_str += f'(prob={self.prob}, ' \
-                    f'degree={90}, ' \
+                    f'degree in [0, 90, 180, 270], ' \
                     f'pad_val={self.pal_val}, ' \
                     f'seg_pad_val={self.seg_pad_val}, ' \
                     f'center={self.center}, ' \
                     f'auto_bound={self.auto_bound})'
         return repr_str
+
+
+@TRANSFORMS.register_module()
+class RandomDownUp(MMCV_RandomResize):
+
+    def __init__(self,
+                 scale: Union[Tuple[int, int], Sequence[Tuple[int, int]]],
+                 ratio_range: Tuple[float, float] = None,
+                 resize_type: str = 'Resize',
+                 up_scale_max: float = 1.0,
+                 prob=0.5,
+                 **resize_kwargs) -> None:
+        super().__init__(scale, ratio_range, resize_type, **resize_kwargs)
+        self.prob = prob
+        self.up_scale_max = up_scale_max
+        assert self.up_scale_max >= 1.0
+
+    def transform(self, results: dict) -> dict:
+        """Transform function to resize images, bounding boxes, semantic
+        segmentation map.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Resized results, ``img``, ``gt_bboxes``, ``gt_semantic_seg``,
+            ``gt_keypoints``, ``scale``, ``scale_factor``, ``img_shape``, and
+            ``keep_ratio`` keys are updated in result dict.
+        """
+        scale_old = results['img'].shape[:2][::-1]
+        if np.random.rand() < self.prob:
+            # random down
+            scale_down = self._random_scale()
+            results['img'] = cv2.resize(results['img'], dsize=scale_down, interpolation=cv2.INTER_LINEAR)
+            # up
+            ratio = np.random.rand() * (self.up_scale_max - 1.0) + 1.0
+            scale_up = [int(x * ratio) for x in scale_old]
+            results['img'] = cv2.resize(results['img'], dsize=scale_up, interpolation=cv2.INTER_LINEAR)
+            results['gt_seg_map'] = cv2.resize(results['gt_seg_map'], dsize=scale_up, interpolation=cv2.INTER_NEAREST)
+        return results
+
 
 @TRANSFORMS.register_module()
 class RGB2Gray(BaseTransform):
@@ -912,6 +951,56 @@ class PhotoMetricDistortion(BaseTransform):
                      f'{self.saturation_upper}), '
                      f'hue_delta={self.hue_delta})')
         return repr_str
+
+
+
+@TRANSFORMS.register_module()
+class PhotoMetricDistortionV2(PhotoMetricDistortion):
+
+    def __init__(self,
+                 brightness_delta: int = 32,
+                 contrast_range: Sequence[float] = (0.5, 1.5),
+                 saturation_range: Sequence[float] = (0.5, 1.5),
+                 hue_delta: int = 18):
+        super(PhotoMetricDistortionV2, self).__init__(brightness_delta,
+                                                      contrast_range,
+                                                      saturation_range,
+                                                      hue_delta)
+
+    def transform(self, results: dict) -> dict:
+        """Transform function to perform photometric distortion on images.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Result dict with images distorted.
+        """
+
+        img = results['img']
+        mask = (np.not_equal(img, 0)).astype(np.uint8)
+
+        # random brightness
+        img = self.brightness(img)
+
+        # mode == 0 --> do random contrast first
+        # mode == 1 --> do random contrast last
+        mode = random.randint(2)
+        if mode == 1:
+            img = self.contrast(img)
+
+        # random saturation
+        img = self.saturation(img)
+
+        # random hue
+        img = self.hue(img)
+
+        # random contrast
+        if mode == 0:
+            img = self.contrast(img)
+
+        results['img'] = img * mask
+        return results
 
 
 @TRANSFORMS.register_module()

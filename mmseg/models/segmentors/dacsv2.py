@@ -77,7 +77,9 @@ def color_jitter(color_jitter, mean, std, data=None, target=None, s=.25, p=.2):
                         kornia.augmentation.ColorJitter(
                             brightness=s, contrast=s, saturation=s, hue=s))
                 denorm_(data, mean, std)
+                mask_padding = torch.sum(data, dim=1, keepdim=True) > 1e-5
                 data = seq(data)
+                data = data * mask_padding.int()
                 renorm_(data, mean, std)
     return data, target
 
