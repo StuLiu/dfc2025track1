@@ -5,11 +5,6 @@ crop_size = (768, 768)
 train_pipeline = [
     dict(type='LoadTifImageFromFileV4'),
     dict(type='LoadTifAnnotationsV2'),
-    dict(
-        type='RandomResize',
-        scale=(1024, 1024),
-        ratio_range=(0.5, 2.0),
-        keep_ratio=True),
     dict(type='RandomCrop', crop_size=crop_size, cat_max_ratio=0.75),
     dict(type='RandomFlip', prob=0.5, direction=['horizontal', 'vertical']),
     dict(type='RandomRotate90', degree=90, prob=0.5),
@@ -24,7 +19,7 @@ test_pipeline = [
     dict(type='LoadTifAnnotationsV2'),
     dict(type='PackSegInputs')
 ]
-img_ratios = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75]
+img_ratios = [1.0]
 tta_pipeline = [
     dict(type='LoadTifImageFromFileV4'),
     dict(

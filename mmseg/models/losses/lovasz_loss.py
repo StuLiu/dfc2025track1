@@ -142,7 +142,7 @@ def lovasz_softmax_flat(probs, labels, classes='present', class_weight=None):
     Returns:
         torch.Tensor: The calculated loss.
     """
-    if probs.numel() == 0:
+    if probs.numel() == 0 or probs.ndim != 2:
         # only void pixels, the gradients should be 0
         return probs * 0.
     C = probs.size(1)
