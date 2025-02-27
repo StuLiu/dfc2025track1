@@ -1,7 +1,7 @@
 # dataset settings
 dataset_type = 'DFC2025SarSegDataset'
 data_root = '/home/liuwang/liuwang_data/documents/datasets/seg/challenges/DFC2025Track1'
-crop_size = (1024, 1024)
+crop_size = (896, 896)
 train_pipeline = [
     dict(type='LoadTifImageFromFileV4'),
     dict(type='LoadTifAnnotationsV2'),
