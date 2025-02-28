@@ -1,10 +1,10 @@
 _base_ = [
     '../_base_/models/upernet_swinv2-base-w24.py',
-    '../_base_/datasets/dfc2025sarseg.py',
+    '../_base_/datasets/dfc2025sarseg672x672.py',
     '../_base_/default_runtime.py',
     '../_base_/schedules/schedule_40k.py'
 ]
-crop_size = (768, 768)
+crop_size = (672, 672)
 data_preprocessor = dict(
     size=crop_size,
     seg_pad_val=0,
@@ -12,7 +12,7 @@ data_preprocessor = dict(
 model = dict(
     data_preprocessor=data_preprocessor,
     backbone=dict(
-        img_size=768,
+        img_size=672,
     ),
     decode_head=dict(
         # in_channels=[64, 128, 320, 512],
@@ -28,7 +28,7 @@ model = dict(
             dict(type='CrossEntropyLoss', loss_name='loss_ce', loss_weight=1.0, ignore_index=0)
         ]
     ),
-    test_cfg=dict(mode='slide', crop_size=(768, 768), stride=(384, 384))
+    test_cfg=dict(mode='slide', crop_size=(672, 672), stride=(336, 336))
 )
 
 optim_wrapper = dict(
