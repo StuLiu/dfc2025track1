@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/models/upernet_swinv2-base-w24.py',
+    '../_base_/models/upernet_convnextv2.py',
     '../_base_/datasets/dfc2025sarseg.py',
     '../_base_/default_runtime.py',
     '../_base_/schedules/schedule_40k.py'
