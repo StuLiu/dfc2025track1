@@ -1,16 +1,19 @@
 _base_ = [
-    '../_base_/models/upernet_convnextv2.py',
-    '../_base_/datasets/dfc2025sarseg1024x1024.py',
+    '../_base_/models/upernet_swinv2-base-w24.py',
+    '../_base_/datasets/dfc2025sarseg.py',
     '../_base_/default_runtime.py',
     '../_base_/schedules/schedule_160k.py'
 ]
-crop_size = (1024, 1024)
+crop_size = (768, 768)
 data_preprocessor = dict(
     size=crop_size,
     seg_pad_val=0,
 )
 model = dict(
     data_preprocessor=data_preprocessor,
+    backbone=dict(
+        img_size=768,
+    ),
     decode_head=dict(
         # in_channels=[64, 128, 320, 512],
         num_classes=9,
@@ -43,7 +46,7 @@ model = dict(
             )
         ]
     ),
-    test_cfg=dict(mode='slide', crop_size=(1024, 1024), stride=(512, 512))
+    test_cfg=dict(mode='slide', crop_size=(768, 768), stride=(384, 384))
 )
 
 optim_wrapper = dict(
