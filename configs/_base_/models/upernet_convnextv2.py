@@ -16,13 +16,24 @@ model = dict(
     backbone=dict(
         type='mmpretrain.ConvNeXt',
         arch='base',
-        out_indices=[0, 1, 2, 3],
+        in_channels=3,
+        use_grn=True,
         drop_path_rate=0.1,
-        layer_scale_init_value=1.0,
-        gap_before_final_norm=False,
+        layer_scale_init_value=0.,
+        stem_patch_size=4,
+        norm_cfg=dict(type='LN2d', eps=1e-6),
+        act_cfg=dict(type='GELU'),
+        linear_pw_conv=True,
+        frozen_stages=0,
+        gap_before_final_norm=True,
+        with_cp=False,
+        out_indices=[0, 1, 2, 3],
         init_cfg=dict(
-            type='Pretrained', checkpoint=checkpoint_file,
-            prefix='backbone.')),
+            type='Pretrained',
+            checkpoint=checkpoint_file,
+            prefix='backbone.'
+        )
+    ),
     decode_head=dict(
         type='UPerHead',
         in_channels=[128, 256, 512, 1024],
