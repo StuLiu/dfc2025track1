@@ -1,34 +1,49 @@
 _base_ = [
     '../_base_/models/upernet_convnextv2.py',
-    '../_base_/datasets/dfc2025sarseg.py',
+    '../_base_/datasets/dfc2025sarseg1024x1024.py',
     '../_base_/default_runtime.py',
-    '../_base_/schedules/schedule_40k.py'
+    '../_base_/schedules/schedule_160k.py'
 ]
-crop_size = (768, 768)
+crop_size = (1024, 1024)
 data_preprocessor = dict(
     size=crop_size,
     seg_pad_val=0,
 )
 model = dict(
     data_preprocessor=data_preprocessor,
-    backbone=dict(
-        img_size=768,
-    ),
     decode_head=dict(
         # in_channels=[64, 128, 320, 512],
         num_classes=9,
+        ignore_index=0,
         loss_decode=[
-            dict(type='CrossEntropyLoss', loss_name='loss_ce', loss_weight=1.0, ignore_index=0)
+            dict(type='SymmetricCELoss', loss_name='loss_sce', loss_weight=1.0, ignore_index=0),
+            dict(
+                type='LovaszLoss',
+                classes='present',
+                per_image=False,
+                reduction='none',
+                loss_weight=1.0,
+                loss_name='loss_lovasz'
+            )
         ]
     ),
     auxiliary_head=dict(
         # in_channels=[64, 128, 320, 512],
         num_classes=9,
+        ignore_index=0,
         loss_decode=[
-            dict(type='CrossEntropyLoss', loss_name='loss_ce', loss_weight=1.0, ignore_index=0)
+            dict(type='SymmetricCELoss', loss_name='loss_sce', loss_weight=1.0, ignore_index=0),
+            dict(
+                type='LovaszLoss',
+                classes='present',
+                per_image=False,
+                reduction='none',
+                loss_weight=1.0,
+                loss_name='loss_lovasz'
+            )
         ]
     ),
-    test_cfg=dict(mode='slide', crop_size=(768, 768), stride=(384, 384))
+    test_cfg=dict(mode='slide', crop_size=(1024, 1024), stride=(512, 512))
 )
 
 optim_wrapper = dict(
@@ -53,16 +68,24 @@ param_scheduler = [
         eta_min=0.0,
         power=1.0,
         begin=1500,
-        end=40000,
+        end=160000,
         by_epoch=False,
     )
 ]
 
-train_dataloader = dict(batch_size=2, num_workers=8)
+train_dataloader = dict(
+    batch_size=2,
+    num_workers=8,
+    dataset=dict(
+        data_prefix=dict(
+            seg_map_path='train/labels_pl/stage1-28-29'
+        )
+    )
+)
 val_dataloader = dict(batch_size=1, num_workers=4)
 test_dataloader = dict(batch_size=1, num_workers=4)
 
-train_cfg = dict(type='IterBasedTrainLoop', max_iters=40000, val_interval=4000)
+train_cfg = dict(type='IterBasedTrainLoop', max_iters=160000, val_interval=16000)
 default_hooks = dict(
-    checkpoint=dict(by_epoch=False, interval=4000, max_keep_ckpts=1,
+    checkpoint=dict(by_epoch=False, interval=16000, max_keep_ckpts=2,
                     save_last=True, save_best=['mIoU'], type='CheckpointHook'))

@@ -68,7 +68,7 @@ train_dataloader = dict(
     num_workers=8,
     dataset=dict(
         data_prefix=dict(
-            seg_map_path='train/labels_pl/official_stage1-28'
+            seg_map_path='train/labels_pl/02_26_uda_segformer_mit-b3_2xb4-80k_oem-768x768-alld_ignore255_dacsv2_ce_th0.968_downup_tta'
         )
     )
 )
