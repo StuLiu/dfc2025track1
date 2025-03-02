@@ -26,6 +26,7 @@ from .vit import VisionTransformer
 from .vpd import VPD
 from .lsknet import LSKNet
 from .dinov2 import DinoV2
+# from .mamba_vision import MMSegMambaVision
 
 
 __all__ = [
@@ -36,6 +37,6 @@ __all__ = [
     'SVT', 'STDCNet', 'STDCContextPathNet', 'BEiT', 'MAE', 'PIDNet', 'MSCAN',
     'DDRNet', 'VPD',
     #################### custom ####################
-    'LSKNet', 'DinoV2'
+    'LSKNet', 'DinoV2', #'MMSegMambaVision'
     ################################################
 ]
