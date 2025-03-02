@@ -1,5 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-from typing import List
+from typing import Dict, List, Optional, Union
 
 import os
 # import ipdb
@@ -7,6 +7,7 @@ import numpy as np
 from PIL import Image
 import skimage.io as sio
 import torch
+import torch.nn as nn
 from mmengine.model import BaseTTAModel
 from mmengine.structures import PixelData
 
@@ -19,13 +20,21 @@ import time
 
 warnings.filterwarnings('ignore')
 
-# save_dir = f"./results_mid/mid_{int(time.time())}"
-# # save_dir = "/mnt/home/liuwang_data/results_mid/segformer-b5_acw_rc0.75-1.5_noiseblur_classmix"
-# os.makedirs(save_dir, exist_ok=True)
-
 
 @MODELS.register_module()
-class SegTTAModel2(BaseTTAModel):
+class SegTTAModelV2(BaseTTAModel):
+    def __init__(
+        self,
+        module: Union[dict, nn.Module],
+        data_preprocessor: Union[dict, nn.Module, None] = None,
+        save_mid_dir: str = None,
+        save_mid_format: str = 'numpy',
+    ):
+        super().__init__(module, data_preprocessor)
+        self.save_mid_dir = save_mid_dir
+        self.save_mid_format = save_mid_format
+        if self.save_mid_dir is not None and self.save_mid_dir != '':
+            os.makedirs(save_mid_dir, exist_ok=True)
 
     def merge_preds(self, data_samples_list: List[SampleList]) -> SampleList:
         """Merge predictions of enhanced data to one prediction.
@@ -54,14 +63,21 @@ class SegTTAModel2(BaseTTAModel):
             else:
                 seg_pred = logits.argmax(dim=0)
 
-            # # saving tta middle result
-            # img_name = os.path.basename(data_samples[0].img_path)[:-4]
-            # np.save(f'{save_dir}/{img_name}.npy', logits.cpu().numpy())
-            # # logits = (logits.cpu().numpy() * 255).astype(np.uint8)
-            # # for i in range(9):
-            # #     sio.imsave(f'{save_dir}/{img_name}_class_{i}.png', logits[i])
+            # saving tta middle result
+            if self.save_mid_dir is not None:
+                img_name = os.path.basename(data_samples[0].img_path)[:-4]
+                np.save(f'{self.save_mid_dir}/{img_name}.npy',
+                        (logits.cpu().numpy() * 255).astype(np.uint8))
+                # logits = (logits.cpu().numpy() * 255).astype(np.uint8)
+                # for i in range(9):
+                #     sio.imsave(f'{save_dir}/{img_name}_class_{i}.png', logits[i])
 
             # saved tta
+            data_sample = SegDataSample(
+                **{
+                    'pred_sem_seg': PixelData(data=seg_pred),
+                    'gt_sem_seg': data_samples[0].gt_sem_seg
+                })
             data_sample.set_data({'pred_sem_seg': PixelData(data=seg_pred)})
             if hasattr(data_samples[0], 'gt_sem_seg'):
                 data_sample.set_data(
