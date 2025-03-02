@@ -6,6 +6,7 @@
 @Date    : 2025/3/2 下午9:51
 @e-mail  : 1183862787@qq.com
 """
+# This script is utilized to achieve SWA, that is model parameters weighted mean.
 import os
 import torch
 from collections import OrderedDict

@@ -1,0 +1,74 @@
+"""
+@Project : mmseg-agri
+@File    : ensemble_weights.py
+@IDE     : PyCharm
+@Author  : Wang Liu
+@Date    : 2025/3/2 下午9:51
+@e-mail  : 1183862787@qq.com
+"""
+# This script is utilized to achieve SWA, that is model parameters weighted mean.
+import os
+import numpy as np
+import skimage.io as sio
+import warnings
+from tqdm import tqdm
+from mmseg.utils.tools import render_segmentation_cv2
+from mmseg.utils.palette import get_palettes
+
+from mmengine.utils import track_parallel_progress
+
+
+warnings.filterwarnings('ignore')
+
+
+jc_name = 'jc004'
+size = (1024, 1024)
+root_dir = '/home/liuwang/liuwang_data/documents/projects/mmseg-agri/submits_mid/dfc_stage2'
+# 定义ckpt文件列表和对应的权重
+mid_dirs = [
+    # f'{root_dir}/02_09_segformer_mit-b5_4xb2-160k_sarseg-768x768_interv1_ignore255_sce-dice',           # 35.10
+    # f'{root_dir}/02_14_segformer_mit-b5_4xb2-160k_sarseg-768x768_interv1_ignore255_gce-lovasz',         # 35.24
+    # f'{root_dir}/02_17_segformer_mit-b5_4xb2-160k_sarseg-768x768_interv1_ignore255_ce-lovasz',          # 35.13
+    # f'{root_dir}/02_17_segformer_mit-b5_4xb2-160k_sarseg-768x768_interv1_ignore255_sce-lovasz',         # 35.31
+    f'{root_dir}/02_28_segformer_mit-b5_4xb2-160k_sarseg-896x896_stage1-28_ignore0_sce-lovasz',         # 35.70
+    f'{root_dir}/02_29_segformer_mit-b5_4xb2-160k_sarseg-896x896_interv3_ignore0_sce-lovasz',           # 35.54
+    f'{root_dir}/03_01_upernet_swinv2-base-w24_4xb2-160k_sarseg-768x768_interv3_ignore0_sce-lovasz',    # 35.57
+    f'{root_dir}/03_01_upernet_convnextv2-base_4xb2-160k_sarseg-1024x1024_interv3_ignore0_sce-lovasz',  # 36.03
+]
+weights = [1, 1, 1, 1]  # 每个模型的权重
+weights_class = [
+    0,      # Background
+    1,      # Bareland
+    1,      # Rangeland
+    1,      # Developed space
+    1,      # Road
+    1,      # Tree
+    1,      # Water
+    1,      # Agriculture land
+    1,      # Building
+]
+weights_class = np.array(weights_class)[:, np.newaxis, np.newaxis]
+weights_class = np.broadcast_to(weights_class, (len(weights_class), *size))
+assert len(mid_dirs) == len(weights) and len(mid_dirs) > 0
+output_dir = f'{root_dir}/{jc_name}'                     # 替换为实际的输出文件路径
+output_dir_vis = f'{output_dir}_color'          # 替换为实际的输出文件路径
+os.makedirs(output_dir, exist_ok=True)
+os.makedirs(output_dir_vis, exist_ok=True)
+palette = get_palettes('oem')
+
+file_names = os.listdir(mid_dirs[0])
+
+
+def process(name):
+    logits = 0
+    for idx, mid_dir in enumerate(mid_dirs):
+        logits_tmp = np.load(f'{mid_dir}/{name}').astype(np.int32)
+        logits = logits + logits_tmp * weights[idx]
+    logits = logits * weights_class
+    out_ids = np.argmax(logits, axis=0).astype(np.uint8)
+    sio.imsave(f'{output_dir}/{os.path.splitext(name)[0]}.png', out_ids)
+    out_color = render_segmentation_cv2(out_ids, palette).astype(np.uint8)
+    sio.imsave(f'{output_dir_vis}/{os.path.splitext(name)[0]}.png', out_color)
+
+
+track_parallel_progress(process, file_names, 8)
