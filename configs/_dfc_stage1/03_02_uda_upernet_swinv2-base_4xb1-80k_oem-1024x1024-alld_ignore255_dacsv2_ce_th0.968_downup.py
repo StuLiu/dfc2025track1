@@ -36,7 +36,7 @@ model = dict(
             ]
         ),
         train_cfg=dict(
-            work_dir='work_dirs/03_02_uda_upernet_swinv2-base_6xb1-80k_oem-768x768-alld_ignore255_dacsv2_ce_th0.968_downup'
+            work_dir='work_dirs/03_02_uda_upernet_swinv2-base_4xb1-80k_oem-1024x1024-alld_ignore255_dacsv2_ce_th0.968_downup'
         ),
         test_cfg=dict(mode='slide', crop_size=crop_size, stride=stride)
     )
