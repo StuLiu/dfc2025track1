@@ -94,7 +94,7 @@ test_dataloader = dict(
         type=dataset_type,
         data_root=data_root,
         data_prefix=dict(
-            img_path='val/sar_images', seg_map_path='val/labels'),
+            img_path='test/sar_images', seg_map_path='test/labels'),
         pipeline=test_pipeline))
 
 val_evaluator = dict(type='IoUMetric', iou_metrics=['mIoU'])
