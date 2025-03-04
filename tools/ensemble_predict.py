@@ -21,7 +21,7 @@ from mmengine.utils import track_parallel_progress
 warnings.filterwarnings('ignore')
 
 
-jc_name = 'jc004'
+jc_name = 'test_jc001'
 size = (1024, 1024)
 root_dir = '/home/liuwang/liuwang_data/documents/projects/mmseg-agri/submits_mid/dfc_stage2'
 # 定义ckpt文件列表和对应的权重
