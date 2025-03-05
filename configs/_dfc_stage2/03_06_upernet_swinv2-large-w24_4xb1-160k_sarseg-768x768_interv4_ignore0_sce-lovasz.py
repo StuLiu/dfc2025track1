@@ -72,13 +72,13 @@ param_scheduler = [
         eta_min=0.0,
         power=1.0,
         begin=1500,
-        end=120000,
+        end=160000,
         by_epoch=False,
     )
 ]
 
 train_dataloader = dict(
-    batch_size=2,
+    batch_size=1,
     num_workers=16,
     dataset=dict(
         data_prefix=dict(
@@ -89,7 +89,7 @@ train_dataloader = dict(
 val_dataloader = dict(batch_size=1, num_workers=4)
 test_dataloader = dict(batch_size=1, num_workers=4)
 
-train_cfg = dict(type='IterBasedTrainLoop', max_iters=120000, val_interval=12000)
+train_cfg = dict(type='IterBasedTrainLoop', max_iters=160000, val_interval=16000)
 default_hooks = dict(
-    checkpoint=dict(by_epoch=False, interval=12000, max_keep_ckpts=2,
+    checkpoint=dict(by_epoch=False, interval=16000, max_keep_ckpts=2,
                     save_last=True, save_best=['mIoU'], type='CheckpointHook'))
