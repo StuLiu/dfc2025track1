@@ -4,7 +4,8 @@ _base_ = [
     '../_base_/default_runtime.py',
     '../_base_/schedules/schedule_120k.py'
 ]
-crop_size = (1024, 1024)
+crop_size = (768, 768)
+stride_size = (384, 384)
 data_preprocessor = dict(
     size=crop_size,
     seg_pad_val=0,
@@ -12,7 +13,7 @@ data_preprocessor = dict(
 model = dict(
     data_preprocessor=data_preprocessor,
     backbone=dict(
-        img_size=1024,
+        img_size=768,
     ),
     decode_head=dict(
         # in_channels=[64, 128, 320, 512],
@@ -46,7 +47,7 @@ model = dict(
             )
         ]
     ),
-    test_cfg=dict(mode='slide', crop_size=crop_size, stride=(512, 512))
+    test_cfg=dict(mode='slide', crop_size=crop_size, stride=stride_size)
 )
 
 optim_wrapper = dict(
