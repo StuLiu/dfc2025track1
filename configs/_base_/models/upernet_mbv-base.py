@@ -12,19 +12,10 @@ model = dict(
     pretrained=None,
     backbone=dict(
         type='MMSegMambaVision',
-        model_name='mamba_vision_B',
-        out_indices=[0, 1, 2, 3],
+        model_name='MambaVision-B-1K',
+        checkpoint_path=None,
         in_channels=3,
-        use_grn=True,
-        drop_path_rate=0.0,
-        layer_scale_init_value=0.,
-        stem_patch_size=4,
-        norm_cfg=dict(type='LN2d', eps=1e-6),
-        act_cfg=dict(type='GELU'),
-        linear_pw_conv=True,
-        frozen_stages=0,
-        gap_before_final_norm=False,
-        with_cp=False
+        init_cfg=None,
     ),
     decode_head=dict(
         type='UPerHead',
@@ -54,3 +45,4 @@ model = dict(
     # model training and testing settings
     train_cfg=dict(),
     test_cfg=dict(mode='whole'))
+find_unused_parameters=True
