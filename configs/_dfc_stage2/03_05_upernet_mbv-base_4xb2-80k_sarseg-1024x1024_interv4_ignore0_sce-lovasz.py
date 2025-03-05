@@ -2,7 +2,7 @@ _base_ = [
     '../_base_/models/upernet_mbv-base.py',
     '../_base_/datasets/dfc2025sarseg1024x1024.py',
     '../_base_/default_runtime.py',
-    '../_base_/schedules/schedule_160k.py'
+    '../_base_/schedules/schedule_80k.py'
 ]
 crop_size = (1024, 1024)
 stride_size = (512, 512)
@@ -69,7 +69,7 @@ param_scheduler = [
         eta_min=0.0,
         power=1.0,
         begin=1500,
-        end=160000,
+        end=80000,
         by_epoch=False,
     )
 ]
@@ -86,7 +86,7 @@ train_dataloader = dict(
 val_dataloader = dict(batch_size=1, num_workers=4)
 test_dataloader = dict(batch_size=1, num_workers=4)
 
-train_cfg = dict(type='IterBasedTrainLoop', max_iters=160000, val_interval=16000)
+train_cfg = dict(type='IterBasedTrainLoop', max_iters=80000, val_interval=8000)
 default_hooks = dict(
-    checkpoint=dict(by_epoch=False, interval=16000, max_keep_ckpts=2,
+    checkpoint=dict(by_epoch=False, interval=8000, max_keep_ckpts=2,
                     save_last=True, save_best=['mIoU'], type='CheckpointHook'))
