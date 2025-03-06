@@ -2,7 +2,7 @@ _base_ = [
     '../_base_/models/upernet_swinv2-large-w24.py',
     '../_base_/datasets/dfc2025sarseg.py',
     '../_base_/default_runtime.py',
-    '../_base_/schedules/schedule_120k.py'
+    '../_base_/schedules/schedule_160k.py'
 ]
 crop_size = (768, 768)
 stride_size = (384, 384)
