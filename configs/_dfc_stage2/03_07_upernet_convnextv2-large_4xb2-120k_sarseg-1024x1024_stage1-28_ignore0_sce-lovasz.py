@@ -1,22 +1,17 @@
 _base_ = [
-    '../_base_/models/upernet_swinv2-large-w24.py',
-    '../_base_/datasets/dfc2025sarseg.py',
+    '../_base_/models/upernet_convnextv2-large.py',
+    '../_base_/datasets/dfc2025sarseg1024x1024.py',
     '../_base_/default_runtime.py',
     '../_base_/schedules/schedule_120k.py'
 ]
-crop_size = (768, 768)
-stride_size = (384, 384)
+crop_size = (1024, 1024)
 data_preprocessor = dict(
     size=crop_size,
     seg_pad_val=0,
 )
 model = dict(
     data_preprocessor=data_preprocessor,
-    backbone=dict(
-        img_size=768,
-    ),
     decode_head=dict(
-        # in_channels=[64, 128, 320, 512],
         num_classes=9,
         ignore_index=0,
         loss_decode=[
@@ -32,7 +27,6 @@ model = dict(
         ]
     ),
     auxiliary_head=dict(
-        # in_channels=[64, 128, 320, 512],
         num_classes=9,
         ignore_index=0,
         loss_decode=[
@@ -47,7 +41,7 @@ model = dict(
             )
         ]
     ),
-    test_cfg=dict(mode='slide', crop_size=crop_size, stride=stride_size)
+    test_cfg=dict(mode='slide', crop_size=(1024, 1024), stride=(512, 512))
 )
 
 optim_wrapper = dict(
@@ -72,24 +66,24 @@ param_scheduler = [
         eta_min=0.0,
         power=1.0,
         begin=1500,
-        end=160000,
+        end=120000,
         by_epoch=False,
     )
 ]
 
 train_dataloader = dict(
-    batch_size=1,
+    batch_size=2,
     num_workers=16,
     dataset=dict(
         data_prefix=dict(
-            seg_map_path='train/labels_pl/stage1_28_30_31_32_ensemble_best'
+            seg_map_path='train/labels_pl/02_26_uda_segformer_mit-b3_2xb4-80k_oem-768x768-alld_ignore255_dacsv2_ce_th0.968_downup_tta'
         )
     )
 )
 val_dataloader = dict(batch_size=1, num_workers=4)
 test_dataloader = dict(batch_size=1, num_workers=4)
 
-train_cfg = dict(type='IterBasedTrainLoop', max_iters=160000, val_interval=16000)
+train_cfg = dict(type='IterBasedTrainLoop', max_iters=120000, val_interval=12000)
 default_hooks = dict(
-    checkpoint=dict(by_epoch=False, interval=16000, max_keep_ckpts=2,
+    checkpoint=dict(by_epoch=False, interval=12000, max_keep_ckpts=2,
                     save_last=True, save_best=['mIoU'], type='CheckpointHook'))
