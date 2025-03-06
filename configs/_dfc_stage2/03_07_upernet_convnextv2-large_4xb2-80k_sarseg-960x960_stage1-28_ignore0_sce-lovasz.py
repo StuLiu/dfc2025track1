@@ -1,10 +1,10 @@
 _base_ = [
     '../_base_/models/upernet_convnextv2-large.py',
-    '../_base_/datasets/dfc2025sarseg1024x1024.py',
+    '../_base_/datasets/dfc2025sarseg960x960.py',
     '../_base_/default_runtime.py',
     '../_base_/schedules/schedule_80k.py'
 ]
-crop_size = (1024, 1024)
+crop_size = (960, 960)
 data_preprocessor = dict(
     size=crop_size,
     seg_pad_val=0,
@@ -41,7 +41,7 @@ model = dict(
             )
         ]
     ),
-    test_cfg=dict(mode='slide', crop_size=(1024, 1024), stride=(512, 512))
+    test_cfg=dict(mode='slide', crop_size=(960, 960), stride=(480, 480))
 )
 
 optim_wrapper = dict(
