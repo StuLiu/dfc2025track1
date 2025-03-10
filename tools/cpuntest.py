@@ -18,7 +18,7 @@ dir_tgt_lbl = '/home/liuwang/liuwang_data/documents/datasets/seg/challenges/DFC2
 os.makedirs(dir_tgt_lbl, exist_ok=False)
 
 dir_pl = (f'/home/liuwang/liuwang_data/documents/datasets/seg/challenges/DFC2025Track1/train/labels_pl/'
-          f'02_26_uda_segformer_mit-b3_2xb4-80k_oem-768x768-alld_ignore255_dacsv2_ce_th0.968_downup_tta')
+          f'03_02_uda_upernet_convnext-base_4xb1-80k_oem-1024x1024-alld_ignore255_dacsv2_ce_th0.968_downup_tta')
 
 names = os.listdir(dir_src)
 names_pl = os.listdir((dir_pl))

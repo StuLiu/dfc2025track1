@@ -26,16 +26,31 @@ size = (1024, 1024)
 root_dir = '/home/liuwang/liuwang_data/documents/projects/mmseg-agri/submits_mid/dfc_stage2'
 # 定义ckpt文件列表和对应的权重
 mid_dirs = [
+    # # ch usai
     # f'{root_dir}/02_09_segformer_mit-b5_4xb2-160k_sarseg-768x768_interv1_ignore255_sce-dice',           # 35.10
     # f'{root_dir}/02_14_segformer_mit-b5_4xb2-160k_sarseg-768x768_interv1_ignore255_gce-lovasz',         # 35.24
     # f'{root_dir}/02_17_segformer_mit-b5_4xb2-160k_sarseg-768x768_interv1_ignore255_ce-lovasz',          # 35.13
     # f'{root_dir}/02_17_segformer_mit-b5_4xb2-160k_sarseg-768x768_interv1_ignore255_sce-lovasz',         # 35.31
-    f'{root_dir}/02_28_segformer_mit-b5_4xb2-160k_sarseg-896x896_stage1-28_ignore0_sce-lovasz',         # 35.70
-    f'{root_dir}/02_29_segformer_mit-b5_4xb2-160k_sarseg-896x896_interv3_ignore0_sce-lovasz',           # 35.54
-    f'{root_dir}/03_01_upernet_swinv2-base-w24_4xb2-160k_sarseg-768x768_interv3_ignore0_sce-lovasz',    # 35.57
-    f'{root_dir}/03_01_upernet_convnextv2-base_4xb2-160k_sarseg-1024x1024_interv3_ignore0_sce-lovasz',  # 36.03
+    # f'{root_dir}/02_28_segformer_mit-b5_4xb2-160k_sarseg-896x896_stage1-28_ignore0_sce-lovasz',         # 35.70
+    # f'{root_dir}/02_29_segformer_mit-b5_4xb2-160k_sarseg-896x896_interv3_ignore0_sce-lovasz',           # 35.54
+    # f'{root_dir}/03_01_upernet_swinv2-base-w24_4xb2-160k_sarseg-768x768_interv3_ignore0_sce-lovasz',    # 35.57
+    # f'{root_dir}/03_01_upernet_convnextv2-base_4xb2-160k_sarseg-1024x1024_interv3_ignore0_sce-lovasz',  # 36.03
+    # # fu sai
+    f'{root_dir}/02_28_segformer_mit-b5_4xb2-160k_sarseg-896x896_stage1-28_ignore0_sce-lovasz',         # -
+    f'{root_dir}/02_29_segformer_mit-b5_4xb2-160k_sarseg-896x896_interv3_ignore0_sce-lovasz',           # -
+    f'{root_dir}/03_01_upernet_swinv2-base-w24_4xb2-160k_sarseg-768x768_interv3_ignore0_sce-lovasz',    # 40.59
+    f'{root_dir}/03_01_upernet_convnextv2-base_4xb2-160k_sarseg-1024x1024_interv3_ignore0_sce-lovasz',  # -
+    # # f'{root_dir}/03_05_segformer_mit-b5_4xb2-160k_sarseg-960x960_interv4_ignore0_sce-lovasz',           # -
+    # # f'{root_dir}/03_05_upernet_swinv2-base-w24_4xb2-160k_sarseg-768x768_interv4_ignore0_sce-lovasz',    # 39.51
+    # f'{root_dir}/03_07_segformer_mit-b5_4xb2-160k_sarseg-960x960_bestv2_ignore0_sce-lovasz',            # -
+    # f'{root_dir}/03_07_upernet_convnextv2-base_4xb2-120k_sarseg-1024x1024_bestv2_ignore0_sce-lovasz',   # -
+    # f'{root_dir}/03_07_upernet_convnextv2-large_4xb2-80k_sarseg-960x960_bestv2_ignore0_sce-lovasz',     # -
+    # f'{root_dir}/03_07_upernet_convnextv2-large_4xb2-80k_sarseg-960x960_stage1-28_ignore0_sce-lovasz',  # 39.93
+    # f'{root_dir}/03_07_upernet_swinv2-base-w24_4xb2-160k_sarseg-768x768_bestv2_ignore0_sce-lovasz',     # -
+    # f'{root_dir}/03_07_upernet_swinv2-large-w24_4xb1-160k_sarseg-768x768_bestv2_ignore0_sce-lovasz',    # -
+    # f'{root_dir}/03_07_upernet_swinv2-large-w24_4xb1-160k_sarseg-768x768_stage1-28_ignore0_sce-lovasz'  # -
 ]
-weights = [1, 1, 1, 1]  # 每个模型的权重
+weights = [1] * len(mid_dirs) # 每个模型的权重
 weights_class = [
     0,      # Background
     1,      # Bareland
@@ -71,4 +86,4 @@ def process(name):
     sio.imsave(f'{output_dir_vis}/{os.path.splitext(name)[0]}.png', out_color)
 
 
-track_parallel_progress(process, file_names, 8)
+track_parallel_progress(process, file_names, 16)

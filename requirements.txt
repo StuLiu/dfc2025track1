@@ -2,3 +2,8 @@
 -r requirements/runtime.txt
 -r requirements/tests.txt
 -r requirements/multimodal.txt
+
+ttach
+kornia
+ftfy
+scikit-image
