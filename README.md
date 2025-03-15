@@ -1,7 +1,7 @@
 # Code for GRSS DFC 2025 track1.
 ![](assert/overview.jpg)
 ***
-# 1.Conda env
+## 1.Conda env
 Cuda version is 11.8.
 ```commandline
 conda create -n mmseg_dfc python=3.10
@@ -22,7 +22,7 @@ pip install scikit-image
 pip install timm
 ```
 
-# 2.Data prepare
+## 2.Data prepare
 Please see in file 'data/DFC2025Track1/copy_dataset_here'.
 
 - If testing only, please copy the OEM-SAR test images to 'data/DFC2025Track1/test/sar_images'.
