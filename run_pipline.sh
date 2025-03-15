@@ -5,28 +5,31 @@
 
 export CUDA_VISIBLE_DEVICES=0,1,2,3
 n_gpu=4
+data_root_oem="./data/OpenEarthMap_mmseg"
+data_root_oem_sar="./data/DFC2025Track1"
 
 # # stage-1
-# train on the open-earth-map optical datasets.
+# train on the open-earth-map optical datasets and open-earth-map-sar test images (test for semi-supervised learning).
 name='03_02_uda_upernet_convnext-base_4xb1-80k_oem-1024x1024-alld_ignore255_dacsv2_ce_th0.968_downup'
-bash tools/dist_train.sh configs/_dfc_stage1/${name}.py ${n_gpu}
+bash tools/dist_train.sh configs/_dfc_stage1/${name}.py ${n_gpu} \
+  --cfg-options train_dataloader.dataset.data_root=${data_root_oem}
+
 # generate pseudo labels
-data_root="/home/liuwang/liuwang_data/documents/datasets/seg/challenges/DFC2025Track1/train"
 ckpt='iter_80000.pth'
 bash tools/dist_test.sh \
   configs/_dfc_stage1/${name}.py \
   work_dirs/${name}/${ckpt} \
   ${n_gpu} \
-  --out /home/liuwang/liuwang_data/documents/datasets/seg/challenges/DFC2025Track1/train/labels_pl/${name}_tta \
+  --out ${data_root_oem_sar}/train/labels_pl/${name}_tta \
   --show-dir work_dirs/${name}/vis_dir \
   --tta \
-  --cfg-options test_dataloader.dataset.data_root=${data_root} \
-  test_dataloader.dataset.data_prefix.img_path="rgb_images" \
-  test_dataloader.dataset.data_prefix.seg_map_path="labels" \
+  --cfg-options test_dataloader.dataset.data_root=${data_root_oem_sar} \
+  test_dataloader.dataset.data_prefix.img_path="train/rgb_images" \
+  test_dataloader.dataset.data_prefix.seg_map_path="train/labels" \
   test_dataloader.batch_size=1 \
   tta_model.type="SegTTAModelV2" \
-  tta_model.save_mid_dir=${data_root}/labels_pl_mid/${name}
-python tools/convert_png2tif.py --dir-name ${name}_tta
+  tta_model.save_mid_dir=${data_root_oem_sar}/labels_pl_mid/${name}
+python tools/convert_png2tif.py --dir-name ${data_root_oem_sar}/train/labels_pl/${name}_tta
 # if using ensemble strategy, you should train different models in the stage-1.
 # And, running the ensemble script at 'tools/ensemble_pseudo_labels.py'
 
@@ -38,6 +41,7 @@ bash tools/dist_test.sh configs/_dfc_stage2/${name}.py work_dirs/${name}/iter_12
   --show-dir submits/dfc_stage2/${name}_tta_vis \
   --cfg-options tta_model.type="SegTTAModelV2" \
   tta_model.save_mid_dir="submits_mid/dfc_stage2/${name}" \
+  train_dataloader.dataset.data_root=${data_root_oem_sar}
   train_dataloader.dataset.data_prefix.seg_map_path=train/labels_pl/${name}_tta \
 cd submits/dfc_stage2/${name}_tta || exit
 zip -r ../mmseg_${name}_tta.zip ./*.png

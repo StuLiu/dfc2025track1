@@ -37,12 +37,7 @@ mid_dirs = [
     f'{root_dir}/03_01_upernet_swinv2-base-w24_4xb2-160k_sarseg-768x768_interv3_ignore0_sce-lovasz',    # 35.57
     f'{root_dir}/03_01_upernet_convnextv2-base_4xb2-160k_sarseg-1024x1024_interv3_ignore0_sce-lovasz',  # 36.03
     # # fu sai
-    # f'{root_dir}/02_28_segformer_mit-b5_4xb2-160k_sarseg-896x896_stage1-28_ignore0_sce-lovasz',         # -
-    # f'{root_dir}/02_29_segformer_mit-b5_4xb2-160k_sarseg-896x896_interv3_ignore0_sce-lovasz',           # -
-    # f'{root_dir}/03_01_upernet_swinv2-base-w24_4xb2-160k_sarseg-768x768_interv3_ignore0_sce-lovasz',    # 40.59
-    # f'{root_dir}/03_01_upernet_convnextv2-base_4xb2-160k_sarseg-1024x1024_interv3_ignore0_sce-lovasz',  # -
-    # # f'{root_dir}/03_05_segformer_mit-b5_4xb2-160k_sarseg-960x960_interv4_ignore0_sce-lovasz',           # -
-    # # f'{root_dir}/03_05_upernet_swinv2-base-w24_4xb2-160k_sarseg-768x768_interv4_ignore0_sce-lovasz',    # 39.51
+    # # the checkpoints are deleted along with the dockers in www.autodl.com
     # f'{root_dir}/03_07_segformer_mit-b5_4xb2-160k_sarseg-960x960_bestv2_ignore0_sce-lovasz',            # -
     # f'{root_dir}/03_07_upernet_convnextv2-base_4xb2-120k_sarseg-1024x1024_bestv2_ignore0_sce-lovasz',   # -
     # f'{root_dir}/03_07_upernet_convnextv2-large_4xb2-80k_sarseg-960x960_bestv2_ignore0_sce-lovasz',     # -

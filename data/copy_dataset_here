@@ -1,0 +1,21 @@
+-DFC2025Track1
+    -test
+        -sar_images
+    -train
+        -rgb_images
+        -sar_images
+        -labels
+
+-OpenEarthMap_mmseg
+    -images
+        -train
+        -val
+        -train_val          # please merge OEM train and val rgb_images.
+        -test
+        -test_with_sarseg   # please merge OEM test rgb_images and OEM-SAR train rgb_images.
+    -annotations
+        -train
+        -val
+        -train_val          # please merge OEM train and val rgb_images.
+        -test               # please using 'data/dfc2025/generate_zero_labels.py' to generate test placeholders
+        -test_with_sarseg   # please using 'data/dfc2025/generate_zero_labels.py' to generate placeholders
