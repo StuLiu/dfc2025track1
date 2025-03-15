@@ -6,7 +6,7 @@
 @Date    : 2025/3/2 下午9:51
 @e-mail  : 1183862787@qq.com
 """
-# This script is utilized to achieve SWA, that is model parameters weighted mean.
+# This script is utilized to prediction ensemble (weighted mean).
 import os
 import numpy as np
 import skimage.io as sio
@@ -21,25 +21,26 @@ from mmengine.utils import track_parallel_progress
 warnings.filterwarnings('ignore')
 
 
-jc_name = 'test_jc001'
+edge_mask_dir = './data/DFC2025Track1/test/edge_mask'
+jc_name = 'test_ensemble'
 size = (1024, 1024)
-root_dir = '/home/liuwang/liuwang_data/documents/projects/mmseg-agri/submits_mid/dfc_stage2'
+root_dir = './submits_mid/dfc_stage2'
 # 定义ckpt文件列表和对应的权重
 mid_dirs = [
-    # # ch usai
+    # # chusai
     # f'{root_dir}/02_09_segformer_mit-b5_4xb2-160k_sarseg-768x768_interv1_ignore255_sce-dice',           # 35.10
     # f'{root_dir}/02_14_segformer_mit-b5_4xb2-160k_sarseg-768x768_interv1_ignore255_gce-lovasz',         # 35.24
     # f'{root_dir}/02_17_segformer_mit-b5_4xb2-160k_sarseg-768x768_interv1_ignore255_ce-lovasz',          # 35.13
     # f'{root_dir}/02_17_segformer_mit-b5_4xb2-160k_sarseg-768x768_interv1_ignore255_sce-lovasz',         # 35.31
-    # f'{root_dir}/02_28_segformer_mit-b5_4xb2-160k_sarseg-896x896_stage1-28_ignore0_sce-lovasz',         # 35.70
-    # f'{root_dir}/02_29_segformer_mit-b5_4xb2-160k_sarseg-896x896_interv3_ignore0_sce-lovasz',           # 35.54
-    # f'{root_dir}/03_01_upernet_swinv2-base-w24_4xb2-160k_sarseg-768x768_interv3_ignore0_sce-lovasz',    # 35.57
-    # f'{root_dir}/03_01_upernet_convnextv2-base_4xb2-160k_sarseg-1024x1024_interv3_ignore0_sce-lovasz',  # 36.03
+    f'{root_dir}/02_28_segformer_mit-b5_4xb2-160k_sarseg-896x896_stage1-28_ignore0_sce-lovasz',         # 35.70
+    f'{root_dir}/02_29_segformer_mit-b5_4xb2-160k_sarseg-896x896_interv3_ignore0_sce-lovasz',           # 35.54
+    f'{root_dir}/03_01_upernet_swinv2-base-w24_4xb2-160k_sarseg-768x768_interv3_ignore0_sce-lovasz',    # 35.57
+    f'{root_dir}/03_01_upernet_convnextv2-base_4xb2-160k_sarseg-1024x1024_interv3_ignore0_sce-lovasz',  # 36.03
     # # fu sai
-    f'{root_dir}/02_28_segformer_mit-b5_4xb2-160k_sarseg-896x896_stage1-28_ignore0_sce-lovasz',         # -
-    f'{root_dir}/02_29_segformer_mit-b5_4xb2-160k_sarseg-896x896_interv3_ignore0_sce-lovasz',           # -
-    f'{root_dir}/03_01_upernet_swinv2-base-w24_4xb2-160k_sarseg-768x768_interv3_ignore0_sce-lovasz',    # 40.59
-    f'{root_dir}/03_01_upernet_convnextv2-base_4xb2-160k_sarseg-1024x1024_interv3_ignore0_sce-lovasz',  # -
+    # f'{root_dir}/02_28_segformer_mit-b5_4xb2-160k_sarseg-896x896_stage1-28_ignore0_sce-lovasz',         # -
+    # f'{root_dir}/02_29_segformer_mit-b5_4xb2-160k_sarseg-896x896_interv3_ignore0_sce-lovasz',           # -
+    # f'{root_dir}/03_01_upernet_swinv2-base-w24_4xb2-160k_sarseg-768x768_interv3_ignore0_sce-lovasz',    # 40.59
+    # f'{root_dir}/03_01_upernet_convnextv2-base_4xb2-160k_sarseg-1024x1024_interv3_ignore0_sce-lovasz',  # -
     # # f'{root_dir}/03_05_segformer_mit-b5_4xb2-160k_sarseg-960x960_interv4_ignore0_sce-lovasz',           # -
     # # f'{root_dir}/03_05_upernet_swinv2-base-w24_4xb2-160k_sarseg-768x768_interv4_ignore0_sce-lovasz',    # 39.51
     # f'{root_dir}/03_07_segformer_mit-b5_4xb2-160k_sarseg-960x960_bestv2_ignore0_sce-lovasz',            # -
@@ -81,9 +82,17 @@ def process(name):
         logits = logits + logits_tmp * weights[idx]
     logits = logits * weights_class
     out_ids = np.argmax(logits, axis=0).astype(np.uint8)
+
+    valid_mask = sio.imread(f'{edge_mask_dir}/{os.path.splitext(name)[0]}.png')
+    if np.sum(valid_mask) / valid_mask.shape[0] / valid_mask.shape[1] < 0.9985:
+        out_ids = (out_ids * valid_mask).astype(np.uint8)
+        print(f'{name}, {np.sum(valid_mask) / valid_mask.shape[0] / valid_mask.shape[1]: .4f}')
+
     sio.imsave(f'{output_dir}/{os.path.splitext(name)[0]}.png', out_ids)
     out_color = render_segmentation_cv2(out_ids, palette).astype(np.uint8)
     sio.imsave(f'{output_dir_vis}/{os.path.splitext(name)[0]}.png', out_color)
 
 
 track_parallel_progress(process, file_names, 16)
+
+print(f'final ensemble predictions is save at {output_dir}')
