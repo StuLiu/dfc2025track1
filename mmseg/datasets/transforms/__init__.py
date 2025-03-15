@@ -21,6 +21,7 @@ from .transforms import (CLAHE, AdjustGamma, Albu, BioMedical3DPad,
                          SegRescale,
                          # custom
                          RandomDownUp,
+                         RandomEdgeMask, RandomEdgeMask2,
                          PhotoMetricDistortionV2,
                          PhotoMetricDistortionTif,
                          RandomRotate90,
@@ -51,4 +52,5 @@ __all__ = [
     'LoadTifAnnotationsV2',
     'MultiLabelPackSegInputs',
     'RandomDownUp',
+    'RandomEdgeMask', 'RandomEdgeMask2'
 ]

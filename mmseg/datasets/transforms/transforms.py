@@ -205,6 +205,200 @@ class CLAHE(BaseTransform):
         return repr_str
 
 
+
+@TRANSFORMS.register_module()
+class RandomEdgeMask(BaseTransform):
+
+    def __init__(self, p=1.0, debug=False):
+        super().__init__()
+        self.p = p
+        self.debug = debug
+
+    def get_random_points_on_edges(self, image):
+        h, w = image.shape[:2]
+        edges = ["top", "right", "bottom", "left"]
+        random.shuffle(edges)
+        edge1, edge2 = edges[:2]
+
+        if edge1 == "top":
+            point1 = (random.randint(0, w - 1), 0)  # (x, y)
+        elif edge1 == "right":
+            point1 = (w - 1, random.randint(0, h - 1))
+        elif edge1 == "bottom":
+            point1 = (random.randint(0, w - 1), h - 1)
+        else:  # left
+            point1 = (0, random.randint(0, h - 1))
+
+        if edge2 == "top":
+            point2 = (random.randint(0, w - 1), 0)
+        elif edge2 == "right":
+            point2 = (w - 1, random.randint(0, h - 1))
+        elif edge2 == "bottom":
+            point2 = (random.randint(0, w - 1), h - 1)
+        else:  # left
+            point2 = (0, random.randint(0, h - 1))
+
+        if point2[0] == point1[0]:
+            point1, point2 =  self.get_random_points_on_edges(image)
+        return point1, point2
+
+    def get_valid_mask(self, img):
+        mask = np.ones(img.shape[:2], dtype=np.int32)
+        if np.random.rand() < self.p:
+            point1, point2 = self.get_random_points_on_edges(img)
+            # 随机选择线上的或线下的部分进行mask
+            up_or_down = (random.random() < 0.5)
+
+            height, width = img.shape[:2]
+            # 计算线的斜率和截距
+            slope = (point2[1] - point1[1]) / (point2[0] - point1[0]) if point2[0] != point1[0] else float('inf')
+            intercept = point1[1] - slope * point1[0]
+
+            for x in range(width):
+                for y in range(height):
+                    # 计算点到线的距离
+                    if point2[0] != point1[0]:
+                        line_y = slope * x + intercept
+                        distance = y - line_y
+                    else:
+                        distance = x - point1[0]  # 垂直线的情况
+
+                    # 随机决定是否mask掉
+                    if up_or_down:  # 50%的概率选择线下或线上的部分
+                        if distance < 0:  # 点在直线上面
+                            mask[y, x] = 0  # mask掉
+                    else:
+                        if distance > 0:
+                            mask[y, x] = 0
+        return mask
+
+    def transform(self, results: dict) -> dict:
+        """Transform function to randomly crop images, semantic segmentation
+        maps.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Randomly cropped results, 'img_shape' key in result dict is
+                updated according to crop size.
+        """
+        img = results['img']
+        channels = img.shape[2]
+        mask = self.get_valid_mask(img)
+        img = np.expand_dims(mask, axis=2).repeat(channels, axis=2) * img
+
+        if self.debug:
+            cv2.imshow('img', img[:,:,::-1].astype(np.uint8))
+            cv2.imshow('mask', mask[:,:].astype(np.uint8) * 255)
+            if cv2.waitKey() == ord('q'):
+                exit(0)
+
+        # crop semantic seg
+        for key in results.get('seg_fields', []):
+            results[key] = mask
+
+        results['img'] = img
+        results['img_shape'] = img.shape[:2]
+        return results
+
+    def __repr__(self):
+        return self.__class__.__name__
+
+
+@TRANSFORMS.register_module()
+class RandomEdgeMask2(BaseTransform):
+
+    def __init__(self, p=1.0, debug=False):
+        super().__init__()
+        self.p = p
+        self.debug = debug
+
+    def get_random_points_on_edges(self, image):
+        h, w = image.shape[:2]
+        edges = ["top", "right", "left"]
+        random.shuffle(edges)
+        edge1, edge2 = edges[:2]
+
+        if edge1 == "top":
+            point1 = (random.randint(0, w - 1), 0)  # (x, y)
+        elif edge1 == "right":
+            point1 = (w - 1, random.randint(0, h // 2))
+        elif edge1 == "bottom":
+            point1 = (random.randint(0, w - 1), h - 1)
+        else:  # left
+            point1 = (0, random.randint(0, h // 2))
+
+        if edge2 == "top":
+            point2 = (random.randint(0, w - 1), 0)
+        elif edge2 == "right":
+            point2 = (w - 1, random.randint(0, h // 2))
+        elif edge2 == "bottom":
+            point2 = (random.randint(0, w - 1), h - 1)
+        else:  # left
+            point2 = (0, random.randint(0, h // 2))
+
+        if point2[0] == point1[0]:
+            point1, point2 =  self.get_random_points_on_edges(image)
+        return point1, point2
+
+    def get_valid_mask(self, img):
+        mask = np.ones(img.shape[:2], dtype=np.int32)
+        if np.random.rand() < self.p:
+            point1, point2 = self.get_random_points_on_edges(img)
+
+            height, width = img.shape[:2]
+            # 计算线的斜率和截距
+            slope = (point2[1] - point1[1]) / (point2[0] - point1[0]) if point2[0] != point1[0] else float('inf')
+            intercept = point1[1] - slope * point1[0]
+
+            for x in range(width):
+                for y in range(height):
+                    # 计算点到线的距离
+                    if point2[0] != point1[0]:
+                        line_y = slope * x + intercept
+                        distance = y - line_y
+                    else:
+                        distance = x - point1[0]  # 垂直线的情况
+
+                    if distance < 0:  # 点在直线上面
+                        mask[y, x] = 0  # mask掉
+        return mask
+
+    def transform(self, results: dict) -> dict:
+        """Transform function to randomly crop images, semantic segmentation
+        maps.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Randomly cropped results, 'img_shape' key in result dict is
+                updated according to crop size.
+        """
+        img = results['img']
+        channels = img.shape[2]
+        mask = self.get_valid_mask(img)
+        img = np.expand_dims(mask, axis=2).repeat(channels, axis=2) * img
+
+        if self.debug:
+            cv2.imshow('img', img[:,:,::-1].astype(np.uint8))
+            cv2.imshow('mask', mask[:,:].astype(np.uint8) * 255)
+            if cv2.waitKey() == ord('q'):
+                exit(0)
+
+        # crop semantic seg
+        for key in results.get('seg_fields', []):
+            results[key] = mask
+
+        results['img'] = img
+        results['img_shape'] = img.shape[:2]
+        return results
+
+    def __repr__(self):
+        return self.__class__.__name__
+
+
 @TRANSFORMS.register_module()
 class RandomCrop(BaseTransform):
     """Random crop the image & seg.

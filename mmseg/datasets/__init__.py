@@ -29,6 +29,7 @@ from .synapse import SynapseDataset
 from .agriculture_vision import AgricultureVisionDataset, MultiLabelAgricultureVisionDataset
 from .mmseg_yreb import MMSegYREBDataset
 from .dfc2025sarseg import DFC2025SarSegDataset
+from .dfc2025saredge import DFC2025SarEdgeDataset
 from .open_earth_map import OpenEarthMapDataset
 from .uda_datasets import UDADataset
 
@@ -73,6 +74,6 @@ __all__ = [
     'NYUDataset', 'HSIDrive20Dataset',
     # custom
     'AgricultureVisionDataset', 'MultiLabelAgricultureVisionDataset',
-    'FBPDataset', 'MMSegYREBDataset', 'DFC2025SarSegDataset', 'OpenEarthMapDataset',
-    'UDADataset',
+    'FBPDataset', 'MMSegYREBDataset', 'DFC2025SarSegDataset', 'DFC2025SarEdgeDataset',
+    'OpenEarthMapDataset', 'UDADataset',
 ]

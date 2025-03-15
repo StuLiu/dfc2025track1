@@ -11,6 +11,8 @@
 import os
 import numpy as np
 from skimage import io
+from argparse import ArgumentParser
+
 
 def generate_zero_label(input_dir, output_dir):
     # 确保输出目录存在
@@ -34,7 +36,13 @@ def generate_zero_label(input_dir, output_dir):
             print(f'Generated zero label for {filename} and saved to {output_filepath}')
 
 # 示例用法
-input_directory = '/home/liuwang/liuwang_data/documents/datasets/seg/challenges/DFC2025Track1/test/sar_images'
-output_directory = '/home/liuwang/liuwang_data/documents/datasets/seg/challenges/DFC2025Track1/test/labels'
+# input_directory = '/home/liuwang/liuwang_data/documents/datasets/seg/challenges/DFC2025Track1/test/sar_images'
+# output_directory = '/home/liuwang/liuwang_data/documents/datasets/seg/challenges/DFC2025Track1/test/labels'
+parser = ArgumentParser()
+parser.add_argument('--input_directory', help='Image file',
+                    default='/home/liuwang/liuwang_data/documents/datasets/seg/challenges/DFC2025Track1/test/sar_images')
+parser.add_argument('--output_directory', help='Config file',
+                    default= '/home/liuwang/liuwang_data/documents/datasets/seg/challenges/DFC2025Track1/test/labels')
+args = parser.parse_args()
 
-generate_zero_label(input_directory, output_directory)
+generate_zero_label(args.input_directory, args.output_directory)

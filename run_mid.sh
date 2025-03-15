@@ -1,8 +1,9 @@
 
+python data/dfc2025/generate_zero_labels.py
 
 # run mid ckpts
-export CUDA_VISIBLE_DEVICES=4,5,6,7
-n_gpu=4
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+n_gpu=8
 
 #name='02_09_segformer_mit-b5_4xb2-160k_sarseg-768x768_interv1_ignore255_sce-dice'
 #bash tools/dist_test3.sh configs/_dfc_stage2/${name}.py work_dirs/${name}/iter_160000.pth ${n_gpu} \
