@@ -8,7 +8,7 @@ data_root='./data/DFC2025Track1'
 # generate placeholders of the test labels
 python data/dfc2025/generate_zero_labels.py \
   --input_directory ${data_root}/test/sar_images \
-  --output_directory ${data_root}/test/labels \
+  --output_directory ${data_root}/test/labels
 
 
 # generate valid mask for test images. (zeros for black invalid area, while ones for valid area)

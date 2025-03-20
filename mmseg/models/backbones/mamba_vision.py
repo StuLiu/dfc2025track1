@@ -11,7 +11,7 @@ from mmengine.registry import MODELS as MMENGINE_MODELS
 from mmseg.registry import MODELS
 
 
-@MODELS.register_module()
+#@MODELS.register_module()
 class MMSegMambaVision(BaseModule):
     """Wrapper to use backbones from timm library. More details can be found in
     `NVlabs <https://github.com/NVlabs/MambaVision/tree/main>`_ .

@@ -8,6 +8,8 @@
 """
 # This script is utilized to prediction ensemble (weighted mean).
 import os
+
+import cv2
 import numpy as np
 import skimage.io as sio
 import warnings
@@ -15,7 +17,7 @@ from tqdm import tqdm
 from mmseg.utils.tools import render_segmentation_cv2
 from mmseg.utils.palette import get_palettes
 
-from mmengine.utils import track_parallel_progress
+from mmengine.utils import track_parallel_progress, track_progress
 
 
 warnings.filterwarnings('ignore')
@@ -78,16 +80,22 @@ def process(name):
     logits = logits * weights_class
     out_ids = np.argmax(logits, axis=0).astype(np.uint8)
 
-    valid_mask = sio.imread(f'{edge_mask_dir}/{os.path.splitext(name)[0]}.png')
+    # valid_mask = sio.imread(f'{edge_mask_dir}/{os.path.splitext(name)[0]}.png')
+    valid_mask = cv2.imread(f'{edge_mask_dir}/{os.path.splitext(name)[0]}.png', flags=cv2.IMREAD_UNCHANGED)
     if np.sum(valid_mask) / valid_mask.shape[0] / valid_mask.shape[1] < 0.9985:
         out_ids = (out_ids * valid_mask).astype(np.uint8)
         print(f'{name}, {np.sum(valid_mask) / valid_mask.shape[0] / valid_mask.shape[1]: .4f}')
 
-    sio.imsave(f'{output_dir}/{os.path.splitext(name)[0]}.png', out_ids)
+    # sio.imsave(f'{output_dir}/{os.path.splitext(name)[0]}.png', out_ids)
+    cv2.imwrite(f'{output_dir}/{os.path.splitext(name)[0]}.png', out_ids)
     out_color = render_segmentation_cv2(out_ids, palette).astype(np.uint8)
-    sio.imsave(f'{output_dir_vis}/{os.path.splitext(name)[0]}.png', out_color)
+    # sio.imsave(f'{output_dir_vis}/{os.path.splitext(name)[0]}.png', out_color)
+    cv2.imwrite(f'{output_dir_vis}/{os.path.splitext(name)[0]}.png', out_color[:, :, ::-1])
 
 
-track_parallel_progress(process, file_names, 16)
+track_parallel_progress(process, file_names, 8)
+
+# # If above progress do not work successfully, please try the single-thread progress below:
+# track_progress(process, file_names)
 
 print(f'final ensemble predictions is save at {output_dir}')
