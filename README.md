@@ -20,6 +20,7 @@ pip install kornia
 pip install ftfy
 pip install scikit-image
 pip install timm
+pip install mmpretrain
 ```
 
 ## 2.Data prepare
