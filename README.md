@@ -1,6 +1,19 @@
 # Code for GRSS DFC 2025 track1.
 ![](assert/overview.jpg)
+
+## Docker
+Alternatively, you could pull the docker image and test.
+```bash
+sudo su
+docker pull registry.ap-northeast-1.aliyuncs.com/liuwang20144623/dfc2025track1:v1
+docker images
+docker run -it --shm-size=60g --gpus all [image_id] /bin/bash
+cd /workspace/DFC2025Track1
+pip install mmpretrain
+bash run_report.sh
+```
 ***
+or testing in local env:
 ## 1.Conda env
 Cuda version is 11.8.
 ```commandline
@@ -32,16 +45,15 @@ Please reorganize the dir tree as shown in 'data/copy_dataset_here'.
 
 ## 3.Test
 Reproduce similarity results:
+The trained model weights should be downloaded [here](https://pan.baidu.com/s/1aT_4JAtlgoALqZgx9lMoJQ?pwd=433w), password=433w
 ```commandline
 bash run_report.sh
 ```
-Note that the final results is slightly lower than the score in leaderboard,
-because our newest model-checkpoints are deleted along with the docker in 'www.autodl.com'.
-We don't know we have the chance to submit our code and weights.
+Note that the final results is slightly different due to the various type of GPUs.
 
 ## 4.Train
 You can also find the training pipline for a single model in 'run_pipline.sh':`
 
 ```commandline
-bash run_report.sh
+bash run_pipline.sh
 ```
