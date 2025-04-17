@@ -1,5 +1,5 @@
 # Code for GRSS DFC 2025 track1.
-![](assert/overview.jpg)
+![](assert/introduction.png)
 
 ## Docker
 Alternatively, you could pull the docker image and test.
